@@ -1,4 +1,4 @@
-import { createSupabaseRouteClient } from "@/app/lib/supabase/route";
+import { createSupabaseRouteClient } from "@/app/lib/supabase/routeClient";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
