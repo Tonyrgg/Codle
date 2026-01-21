@@ -9,11 +9,18 @@ type TodayAttempt = {
   guess: string;
   bulls: number;
   cows: number;
+  marks: Mark[];
   created_at: string;
 };
 
 type TodayResponse =
-  | { ok: true; date: string; length: number; maxAttempts: number; attempts: TodayAttempt[] }
+  | {
+      ok: true;
+      date: string;
+      length: number;
+      maxAttempts: number;
+      attempts: TodayAttempt[];
+    }
   | { ok: false; error: string };
 
 type GuessResponse =
@@ -77,16 +84,22 @@ export function Game() {
 
         const mapped = (data.attempts ?? [])
           .sort((a, b) => a.attempt_number - b.attempt_number)
-          .map(a => ({ guess: a.guess, bulls: a.bulls, cows: a.cows, marks: undefined as Mark[] | undefined }));
+          .map((a) => ({
+            guess: a.guess,
+            bulls: a.bulls,
+            cows: a.cows,
+            marks: a.marks,
+          }));
 
         setAttempts(mapped);
 
-        const alreadyWon = mapped.some(a => a.bulls === LENGTH);
+        const alreadyWon = mapped.some((a) => a.bulls === LENGTH);
         const outOfTries = mapped.length >= MAX;
         setLocked(alreadyWon || outOfTries);
 
         if (alreadyWon) setStatus("Hai già vinto oggi.");
         else if (outOfTries) setStatus("Tentativi terminati per oggi.");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         setStatus(e?.message ?? "Errore imprevisto");
       } finally {
@@ -96,13 +109,18 @@ export function Game() {
   }, []);
 
   const rows = useMemo(() => {
-    const filled = attempts.map(a => {
+    const filled = attempts.map((a) => {
       const chars = a.guess.padEnd(LENGTH, " ").slice(0, LENGTH).split("");
       return { chars, marks: a.marks, bulls: a.bulls, cows: a.cows };
     });
 
     while (filled.length < MAX) {
-      filled.push({ chars: Array(LENGTH).fill(""), marks: undefined as Mark[] | undefined, bulls: 0, cows: 0 });
+      filled.push({
+        chars: Array(LENGTH).fill(""),
+        marks: undefined as Mark[] | undefined,
+        bulls: 0,
+        cows: 0,
+      });
     }
     return filled;
   }, [attempts]);
@@ -110,12 +128,12 @@ export function Game() {
   function addDigit(d: string) {
     if (locked) return;
     if (current.length >= LENGTH) return;
-    setCurrent(prev => prev + d);
+    setCurrent((prev) => prev + d);
   }
 
   function backspace() {
     if (locked) return;
-    setCurrent(prev => prev.slice(0, -1));
+    setCurrent((prev) => prev.slice(0, -1));
   }
 
   async function submit() {
@@ -142,7 +160,15 @@ export function Game() {
         return;
       }
 
-      setAttempts(prev => [...prev, { guess: current, bulls: data.bulls, cows: data.cows, marks: data.marks }]);
+      setAttempts((prev) => [
+        ...prev,
+        {
+          guess: current,
+          bulls: data.bulls,
+          cows: data.cows,
+          marks: data.marks,
+        },
+      ]);
       setCurrent("");
 
       if (data.win) {
@@ -152,6 +178,7 @@ export function Game() {
         setLocked(true);
         setStatus("Tentativi terminati per oggi.");
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       setStatus(e?.message ?? "Errore imprevisto");
     }
@@ -161,11 +188,15 @@ export function Game() {
     <div className="mx-auto max-w-md p-4">
       <header className="mb-4">
         <h1 className="text-2xl font-semibold">Codle</h1>
-        <div className="text-sm text-zinc-500">{loading ? "Caricamento..." : date ? `Data: ${date}` : ""}</div>
+        <div className="text-sm text-zinc-500">
+          {loading ? "Caricamento..." : date ? `Data: ${date}` : ""}
+        </div>
       </header>
 
       {status ? (
-        <div className="mb-3 rounded border border-zinc-200 bg-white p-2 text-sm">{status}</div>
+        <div className="mb-3 rounded border border-zinc-200 bg-white p-2 text-sm">
+          {status}
+        </div>
       ) : null}
 
       <section className="grid gap-2">
@@ -176,7 +207,7 @@ export function Game() {
                 <div
                   key={j}
                   className={`flex h-12 w-12 items-center justify-center rounded font-mono text-xl font-semibold ${cellClass(
-                    row.marks?.[j]
+                    row.marks?.[j],
                   )}`}
                 >
                   {ch}
@@ -196,9 +227,11 @@ export function Game() {
         ))}
       </section>
 
-      <section className="mt-4 rounded border border-zinc-200 bg-white p-3">
+      <section className="mt-4 rounded border border-zinc-200 bg-emerald-700 p-3">
         <div className="mb-2 flex items-center justify-between">
-          <div className="font-mono  text-lg">{current.padEnd(LENGTH, "•")}</div>
+          <div className="font-mono text-black text-lg">
+            {current.padEnd(LENGTH, "•")}
+          </div>
           <button
             className="rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             onClick={submit}
@@ -209,7 +242,7 @@ export function Game() {
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(n => (
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
             <button
               key={n}
               className="rounded bg-black p-3 text-lg font-semibold disabled:opacity-50"
@@ -220,7 +253,11 @@ export function Game() {
             </button>
           ))}
 
-          <button className="rounded bg-black p-3 text-sm font-medium disabled:opacity-50" onClick={backspace} disabled={locked}>
+          <button
+            className="rounded bg-black p-3 text-sm font-medium disabled:opacity-50"
+            onClick={backspace}
+            disabled={locked}
+          >
             Canc
           </button>
 
