@@ -94,6 +94,9 @@ export function Game() {
   const currentRef = useRef(current);
   const lockedRef = useRef(locked);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
+
   useEffect(() => {
     currentRef.current = current;
   }, [current]);
@@ -152,6 +155,8 @@ export function Game() {
   }
 
   async function submitValue(value: string) {
+    if (isSubmittingRef.current) return; // blocca spam
+    setIsSubmitting(true);
     if (locked) return;
 
     if (value.length !== LENGTH) {
@@ -190,6 +195,8 @@ export function Game() {
       }
     } catch (e: any) {
       setStatus(e?.message ?? "Errore imprevisto");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -236,6 +243,7 @@ export function Game() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (isSubmittingRef.current) return;
       // Se l'utente sta scrivendo in un input/textarea, non interferire
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
@@ -274,6 +282,10 @@ export function Game() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
 
   return (
     <div className="mx-auto max-w-md p-4">
@@ -326,9 +338,9 @@ export function Game() {
           <button
             className="rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             onClick={() => submitValue(current)}
-            disabled={locked || current.length !== LENGTH}
+            disabled={locked || isSubmitting || current.length !== LENGTH}
           >
-            Invio
+            {isSubmitting ? "Inviando..." : "Invio"}
           </button>
         </div>
 
