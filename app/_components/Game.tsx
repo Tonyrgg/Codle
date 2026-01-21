@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 
 type Mark = "green" | "yellow" | "gray";
 
@@ -54,6 +54,31 @@ function cellClass(mark?: Mark) {
   }
 }
 
+type KeyState = "green" | "yellow" | "gray" | "unused";
+
+function upgradeKeyState(prev: KeyState, next: KeyState): KeyState {
+  const rank: Record<KeyState, number> = {
+    unused: 0,
+    gray: 1,
+    yellow: 2,
+    green: 3,
+  };
+  return rank[next] > rank[prev] ? next : prev;
+}
+
+function keyClass(state: KeyState) {
+  switch (state) {
+    case "green":
+      return "bg-green-600 text-white";
+    case "yellow":
+      return "bg-yellow-500 text-black";
+    case "gray":
+      return "bg-zinc-700 text-white";
+    default:
+      return "bg-zinc-100 text-black";
+  }
+}
+
 export function Game() {
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState("");
@@ -66,6 +91,107 @@ export function Game() {
 
   const [current, setCurrent] = useState("");
   const [locked, setLocked] = useState(false);
+  const currentRef = useRef(current);
+  const lockedRef = useRef(locked);
+
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
+
+  useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
+
+  const keyStates = useMemo(() => {
+    const map: Record<string, KeyState> = {};
+    for (let d = 0; d <= 9; d++) map[String(d)] = "unused";
+
+    for (const a of attempts) {
+      if (!a.marks) continue;
+      const digits = a.guess.split("");
+      for (let i = 0; i < digits.length; i++) {
+        const digit = digits[i];
+        const mark = a.marks[i];
+
+        const state: KeyState =
+          mark === "green" ? "green" : mark === "yellow" ? "yellow" : "gray";
+
+        map[digit] = upgradeKeyState(map[digit], state);
+      }
+    }
+
+    return map;
+  }, [attempts]);
+
+  const rows = useMemo(() => {
+    const filled = attempts.map((a) => {
+      const chars = a.guess.padEnd(LENGTH, " ").slice(0, LENGTH).split("");
+      return { chars, marks: a.marks, bulls: a.bulls, cows: a.cows };
+    });
+
+    while (filled.length < MAX) {
+      filled.push({
+        chars: Array(LENGTH).fill(""),
+        marks: undefined as Mark[] | undefined,
+        bulls: 0,
+        cows: 0,
+      });
+    }
+    return filled;
+  }, [attempts]);
+
+  function addDigit(d: string) {
+    if (locked) return;
+    if (current.length >= LENGTH) return;
+    setCurrent((prev) => prev + d);
+  }
+
+  function backspace() {
+    if (locked) return;
+    setCurrent((prev) => prev.slice(0, -1));
+  }
+
+  async function submitValue(value: string) {
+    if (locked) return;
+
+    if (value.length !== LENGTH) {
+      setStatus("Inserisci 4 cifre.");
+      return;
+    }
+
+    setStatus("");
+
+    try {
+      const res = await fetch("/api/guess", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guess: value }),
+      });
+
+      const data: GuessResponse = await res.json();
+
+      if (!data.ok) {
+        setStatus(data.error || "Errore invio tentativo");
+        return;
+      }
+
+      setAttempts((prev) => [
+        ...prev,
+        { guess: value, bulls: data.bulls, cows: data.cows, marks: data.marks },
+      ]);
+      setCurrent("");
+
+      if (data.win) {
+        setLocked(true);
+        setStatus("Hai vinto.");
+      } else if (data.attemptNumber >= MAX) {
+        setLocked(true);
+        setStatus("Tentativi terminati per oggi.");
+      }
+    } catch (e: any) {
+      setStatus(e?.message ?? "Errore imprevisto");
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -108,81 +234,46 @@ export function Game() {
     })();
   }, []);
 
-  const rows = useMemo(() => {
-    const filled = attempts.map((a) => {
-      const chars = a.guess.padEnd(LENGTH, " ").slice(0, LENGTH).split("");
-      return { chars, marks: a.marks, bulls: a.bulls, cows: a.cows };
-    });
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // Se l'utente sta scrivendo in un input/textarea, non interferire
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (
+        tag === "input" ||
+        tag === "textarea" ||
+        (target as any)?.isContentEditable
+      )
+        return;
 
-    while (filled.length < MAX) {
-      filled.push({
-        chars: Array(LENGTH).fill(""),
-        marks: undefined as Mark[] | undefined,
-        bulls: 0,
-        cows: 0,
-      });
-    }
-    return filled;
-  }, [attempts]);
+      if (lockedRef.current) return;
 
-  function addDigit(d: string) {
-    if (locked) return;
-    if (current.length >= LENGTH) return;
-    setCurrent((prev) => prev + d);
-  }
-
-  function backspace() {
-    if (locked) return;
-    setCurrent((prev) => prev.slice(0, -1));
-  }
-
-  async function submit() {
-    if (locked) return;
-
-    if (current.length !== LENGTH) {
-      setStatus("Inserisci 4 cifre.");
-      return;
-    }
-
-    setStatus("");
-
-    try {
-      const res = await fetch("/api/guess", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guess: current }),
-      });
-
-      const data: GuessResponse = await res.json();
-
-      if (!data.ok) {
-        setStatus(data.error || "Errore invio tentativo");
+      if (e.key >= "0" && e.key <= "9") {
+        setCurrent((prev) => (prev.length < LENGTH ? prev + e.key : prev));
         return;
       }
 
-      setAttempts((prev) => [
-        ...prev,
-        {
-          guess: current,
-          bulls: data.bulls,
-          cows: data.cows,
-          marks: data.marks,
-        },
-      ]);
-      setCurrent("");
-
-      if (data.win) {
-        setLocked(true);
-        setStatus("Hai vinto.");
-      } else if (data.attemptNumber >= MAX) {
-        setLocked(true);
-        setStatus("Tentativi terminati per oggi.");
+      if (e.key === "Backspace") {
+        setCurrent((prev) => prev.slice(0, -1));
+        return;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setStatus(e?.message ?? "Errore imprevisto");
+
+      if (e.key === "Enter") {
+        // submit usando lo stato più aggiornato
+        const value = currentRef.current;
+        if (value.length !== LENGTH) {
+          setStatus("Inserisci 4 cifre.");
+          return;
+        }
+        // Chiamiamo submit con value esplicito (vedi step 4)
+        submitValue(value);
+        return;
+      }
     }
-  }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <div className="mx-auto max-w-md p-4">
@@ -234,7 +325,7 @@ export function Game() {
           </div>
           <button
             className="rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-            onClick={submit}
+            onClick={() => submitValue(current)}
             disabled={locked || current.length !== LENGTH}
           >
             Invio
@@ -245,7 +336,7 @@ export function Game() {
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
             <button
               key={n}
-              className="rounded bg-black p-3 text-lg font-semibold disabled:opacity-50"
+              className={`rounded p-3 text-lg font-semibold disabled:opacity-50 ${keyClass(keyStates[n])}`}
               onClick={() => addDigit(n)}
               disabled={locked}
             >
@@ -262,7 +353,7 @@ export function Game() {
           </button>
 
           <button
-            className="rounded bg-black p-3 text-lg font-semibold disabled:opacity-50"
+            className={`rounded p-3 text-lg font-semibold disabled:opacity-50 ${keyClass(keyStates["0"])}`}
             onClick={() => addDigit("0")}
             disabled={locked}
           >
