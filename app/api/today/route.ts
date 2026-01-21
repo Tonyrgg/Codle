@@ -1,27 +1,33 @@
+import { evaluate } from "@/app/lib/evaluate";
+import { gameDateRome, dailySecret } from "@/app/lib/secret";
 import { createSupabaseRouteClient } from "@/app/lib/supabase/routeClient";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-function gameDateRome(d = new Date()): string {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Rome",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return fmt.format(d);
-}
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const LENGTH = 4;
+const MAX_ATTEMPTS = 8;
 
 export async function GET(request: NextRequest) {
   const { supabase, applyCookies } = createSupabaseRouteClient(request);
 
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) {
-    return applyCookies(NextResponse.json({ ok: false, error: "No session" }, { status: 401 }));
+  // 1) Ensure session (self-healing)
+  const { data: userData1 } = await supabase.auth.getUser();
+  if (!userData1?.user) {
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) {
+      return applyCookies(
+        NextResponse.json({ ok: false, error: error.message }, { status: 500 }),
+      );
+    }
   }
 
+  // 2) Data di gioco (Europe/Rome)
   const date = gameDateRome();
 
+  // 3) Leggi tentativi (RLS applicata)
   const { data: attempts, error } = await supabase
     .from("attempts")
     .select("attempt_number, guess, bulls, cows, created_at")
@@ -29,16 +35,38 @@ export async function GET(request: NextRequest) {
     .order("attempt_number", { ascending: true });
 
   if (error) {
-    return applyCookies(NextResponse.json({ ok: false, error: error.message }, { status: 500 }));
+    return applyCookies(
+      NextResponse.json({ ok: false, error: error.message }, { status: 500 }),
+    );
   }
+
+  // 4) Calcola segreto giornaliero e marks per ogni riga
+  let secret: string;
+  try {
+    secret = dailySecret(date);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (e: any) {
+    return applyCookies(
+      NextResponse.json(
+        { ok: false, error: e?.message ?? "Secret error" },
+        { status: 500 },
+      ),
+    );
+  }
+
+  const enriched = (attempts ?? []).map((a) => {
+    const guess = String(a.guess ?? "");
+    const { marks } = evaluate(secret, guess); // green/yellow/gray
+    return { ...a, marks };
+  });
 
   return applyCookies(
     NextResponse.json({
       ok: true,
       date,
-      length: 4,
-      maxAttempts: 8,
-      attempts: attempts ?? [],
-    })
+      length: LENGTH,
+      maxAttempts: MAX_ATTEMPTS,
+      attempts: enriched,
+    }),
   );
 }
