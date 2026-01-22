@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type Mark = "green" | "yellow" | "gray";
 
@@ -40,17 +46,23 @@ type GuessResponse =
 
 const LENGTH = 4;
 const MAX = 8;
+const PLACEHOLDER = "-";
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
 
 function cellClass(mark?: Mark) {
   switch (mark) {
     case "green":
-      return "bg-green-600 text-white";
+      return "tile-back tile-back-green";
     case "yellow":
-      return "bg-yellow-500 text-black";
+      return "tile-back tile-back-yellow";
     case "gray":
-      return "bg-zinc-700 text-white";
+      return "tile-back tile-back-gray";
     default:
-      return "bg-zinc-200 text-zinc-900";
+      return "tile-back";
   }
 }
 
@@ -69,13 +81,13 @@ function upgradeKeyState(prev: KeyState, next: KeyState): KeyState {
 function keyClass(state: KeyState) {
   switch (state) {
     case "green":
-      return "bg-green-600 text-white";
+      return "digit-key digit-key-green";
     case "yellow":
-      return "bg-yellow-500 text-black";
+      return "digit-key digit-key-yellow";
     case "gray":
-      return "bg-zinc-700 text-white";
+      return "digit-key digit-key-gray";
     default:
-      return "bg-zinc-100 text-black";
+      return "digit-key digit-key-unused";
   }
 }
 
@@ -84,7 +96,7 @@ export function Game() {
   const [date, setDate] = useState("");
   const [status, setStatus] = useState("");
 
-  // tentativi in UI (i più recenti avranno marks perché arrivano da /api/guess)
+  // tentativi in UI (i piu' recenti avranno marks perche' arrivano da /api/guess)
   const [attempts, setAttempts] = useState<
     { guess: string; bulls: number; cows: number; marks?: Mark[] }[]
   >([]);
@@ -96,9 +108,38 @@ export function Game() {
 
   const [revealRowIndex, setRevealRowIndex] = useState<number | null>(null);
   const [revealStep, setRevealStep] = useState<number>(-1); // -1..3
-  const [revealedRowMax, setRevealedRowMax] = useState<number>(-1); // righe già definitivamente rivelate
+  const [revealedRowMax, setRevealedRowMax] = useState<number>(-1); // righe gia' definitivamente rivelate
 
   const timeoutsRef = useRef<number[]>([]);
+
+  const clearRevealTimers = useCallback(() => {
+    timeoutsRef.current.forEach((t) => window.clearTimeout(t));
+    timeoutsRef.current = [];
+  }, []);
+
+  const startReveal = useCallback(
+    (rowIdx: number) => {
+      clearRevealTimers();
+
+      setRevealRowIndex(rowIdx);
+      setRevealStep(-1);
+
+      const delays = [50, 170, 290, 410];
+      delays.forEach((d, step) => {
+        const id = window.setTimeout(() => setRevealStep(step), d);
+        timeoutsRef.current.push(id);
+      });
+
+      const endId = window.setTimeout(() => {
+        setRevealedRowMax(rowIdx);
+        setRevealRowIndex(null);
+        setRevealStep(-1);
+      }, 560);
+
+      timeoutsRef.current.push(endId);
+    },
+    [clearRevealTimers]
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -160,95 +201,69 @@ export function Game() {
     setCurrent((prev) => prev.slice(0, -1));
   }
 
-  async function submitValue(value: string) {
-    if (isSubmittingRef.current) return; // blocca spam
-    setIsSubmitting(true);
-    if (locked) return;
+  const submitValue = useCallback(
+    async (value: string) => {
+      if (isSubmittingRef.current || locked) return;
 
-    if (value.length !== LENGTH) {
-      setStatus("Inserisci 4 cifre.");
-      return;
-    }
-
-    setStatus("");
-
-    try {
-      const res = await fetch("/api/guess", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guess: value }),
-      });
-
-      const data: GuessResponse = await res.json();
-
-      if (!data.ok) {
-        setStatus(data.error || "Errore invio tentativo");
+      if (value.length !== LENGTH) {
+        setStatus("Inserisci 4 cifre.");
         return;
       }
 
-      setAttempts((prev) => {
-        const rowIdx = prev.length; // indice della nuova riga
-        const next = [
-          ...prev,
-          {
-            guess: value,
-            bulls: data.bulls,
-            cows: data.cows,
-            marks: data.marks,
-          },
-        ];
+      setStatus("");
+      setIsSubmitting(true);
 
-        // avvia animazione sulla riga appena aggiunta
-        startReveal(rowIdx);
+      try {
+        const res = await fetch("/api/guess", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guess: value }),
+        });
 
-        return next;
-      });
-      setCurrent("");
+        const data: GuessResponse = await res.json();
 
-      if (data.win) {
-        setLocked(true);
-        setStatus("Hai vinto.");
-      } else if (data.attemptNumber >= MAX) {
-        setLocked(true);
-        setStatus("Tentativi terminati per oggi.");
+        if (!data.ok) {
+          setStatus(data.error || "Errore invio tentativo");
+          return;
+        }
+
+        setAttempts((prev) => {
+          const rowIdx = prev.length;
+          const next = [
+            ...prev,
+            {
+              guess: value,
+              bulls: data.bulls,
+              cows: data.cows,
+              marks: data.marks,
+            },
+          ];
+
+          startReveal(rowIdx);
+
+          return next;
+        });
+        setCurrent("");
+
+        if (data.win) {
+          setLocked(true);
+          setStatus("Hai vinto.");
+        } else if (data.attemptNumber >= MAX) {
+          setLocked(true);
+          setStatus("Tentativi terminati per oggi.");
+        }
+      } catch (error) {
+        setStatus(getErrorMessage(error, "Errore imprevisto"));
+      } finally {
+        setIsSubmitting(false);
       }
-    } catch (e: any) {
-      setStatus(e?.message ?? "Errore imprevisto");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  function clearRevealTimers() {
-    timeoutsRef.current.forEach((t) => window.clearTimeout(t));
-    timeoutsRef.current = [];
-  }
-
-  function startReveal(rowIdx: number) {
-    clearRevealTimers();
-
-    setRevealRowIndex(rowIdx);
-    setRevealStep(-1);
-
-    const delays = [50, 170, 290, 410]; // step 0..3
-    delays.forEach((d, step) => {
-      const id = window.setTimeout(() => setRevealStep(step), d);
-      timeoutsRef.current.push(id);
-    });
-
-    // fine animazione: “consolida” la riga come rivelata
-    const endId = window.setTimeout(() => {
-      setRevealedRowMax(rowIdx);
-      setRevealRowIndex(null);
-      setRevealStep(-1);
-    }, 560);
-
-    timeoutsRef.current.push(endId);
-  }
+    },
+    [locked, startReveal]
+  );
 
   useEffect(() => {
     return () => clearRevealTimers();
-  }, []);
+  }, [clearRevealTimers]);
 
   useEffect(() => {
     (async () => {
@@ -280,11 +295,10 @@ export function Game() {
         const outOfTries = mapped.length >= MAX;
         setLocked(alreadyWon || outOfTries);
 
-        if (alreadyWon) setStatus("Hai già vinto oggi.");
+        if (alreadyWon) setStatus("Hai gia' vinto oggi.");
         else if (outOfTries) setStatus("Tentativi terminati per oggi.");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (e: any) {
-        setStatus(e?.message ?? "Errore imprevisto");
+      } catch (error) {
+        setStatus(getErrorMessage(error, "Errore imprevisto"));
       } finally {
         setLoading(false);
       }
@@ -300,7 +314,7 @@ export function Game() {
       if (
         tag === "input" ||
         tag === "textarea" ||
-        (target as any)?.isContentEditable
+        target?.isContentEditable
       )
         return;
 
@@ -317,7 +331,7 @@ export function Game() {
       }
 
       if (e.key === "Enter") {
-        // submit usando lo stato più aggiornato
+        // submit usando lo stato piu' aggiornato
         const value = currentRef.current;
         if (value.length !== LENGTH) {
           setStatus("Inserisci 4 cifre.");
@@ -331,25 +345,23 @@ export function Game() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [submitValue]);
 
   useEffect(() => {
     isSubmittingRef.current = isSubmitting;
   }, [isSubmitting]);
 
   return (
-    <div className="mx-auto max-w-md p-4">
+    <div className="game-shell mx-auto max-w-md p-4">
       <header className="mb-4">
         <h1 className="text-2xl font-semibold">Codle</h1>
-        <div className="text-sm text-zinc-500">
+        <div className="game-subtitle text-sm">
           {loading ? "Caricamento..." : date ? `Data: ${date}` : ""}
         </div>
       </header>
 
       {status ? (
-        <div className="mb-3 rounded border border-zinc-200 bg-white p-2 text-sm">
-          {status}
-        </div>
+        <div className="status-panel mb-3 rounded p-2 text-sm">{status}</div>
       ) : null}
 
       <section className="grid gap-2">
@@ -360,7 +372,7 @@ export function Game() {
                 const mark = row.marks?.[j];
 
                 const flipped =
-                  // righe già consolidate
+                  // righe gia' consolidate
                   i <= revealedRowMax ||
                   // riga in reveal: flip progressivo cella per cella
                   (revealRowIndex === i && revealStep >= j);
@@ -371,7 +383,7 @@ export function Game() {
                       className={`flip-inner ${flipped ? "flip-reveal" : ""}`}
                     >
                       {/* FRONT (neutro) */}
-                      <div className="flip-face rounded font-mono text-xl font-semibold bg-zinc-200 text-zinc-900">
+                      <div className="flip-face rounded font-mono text-xl font-semibold tile-front">
                         {ch}
                       </div>
 
@@ -387,7 +399,7 @@ export function Game() {
               })}
             </div>
 
-            <div className="w-20 text-sm text-zinc-600">
+            <div className="attempt-stats w-20 text-sm">
               {i < attempts.length ? (
                 <div>
                   <div>V: {row.bulls}</div>
@@ -399,13 +411,13 @@ export function Game() {
         ))}
       </section>
 
-      <section className="mt-4 rounded border border-zinc-200 bg-emerald-700 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="font-mono text-black text-lg">
-            {current.padEnd(LENGTH, "•")}
+      <section className="keypad-panel mt-4 rounded border p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="code-display font-mono text-lg">
+            {current.padEnd(LENGTH, PLACEHOLDER)}
           </div>
           <button
-            className="rounded bg-black px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="primary-btn rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
             onClick={() => submitValue(current)}
             disabled={locked || isSubmitting || current.length !== LENGTH}
           >
@@ -426,7 +438,7 @@ export function Game() {
           ))}
 
           <button
-            className="rounded bg-black p-3 text-sm font-medium disabled:opacity-50"
+            className="control-key rounded p-3 text-sm font-medium disabled:opacity-50"
             onClick={backspace}
             disabled={locked}
           >
@@ -442,7 +454,7 @@ export function Game() {
           </button>
 
           <button
-            className="rounded bg-black p-3 text-sm font-medium disabled:opacity-50"
+            className="control-key rounded p-3 text-sm font-medium disabled:opacity-50"
             onClick={() => setCurrent("")}
             disabled={locked}
           >
