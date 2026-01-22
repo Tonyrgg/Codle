@@ -1,8 +1,77 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --background: #f4f7fb;
+  --foreground: #0f172a;
+  --text-muted: #6b7280;
+  --card-bg: #ffffff;
+  --card-border: #e4e4e7;
+  --card-shadow: 0 30px 55px rgba(15, 23, 42, 0.08);
+  --accent: #047857;
+  --accent-strong: #065f46;
+  --menu-gradient-from: #ecfccb;
+  --menu-gradient-via: #f7fee7;
+  --menu-gradient-to: #ffffff;
+  --quiz-gradient-from: #ffffff;
+  --quiz-gradient-to: #ecfccb;
+  --panel-bg: #065f46;
+  --panel-border: #064532;
+  --panel-text: #f0fdf4;
+  --tile-front-bg: #e4e4e7;
+  --tile-front-text: #111827;
+  --key-bg: #f4f4f5;
+  --key-text: #111827;
+  --key-muted: #a1a1aa;
+  --status-bg: rgba(255, 255, 255, 0.9);
+  --status-border: rgba(148, 163, 184, 0.5);
+  --attempt-text: #475569;
+  --control-key-bg: rgba(23, 23, 23, 0.85);
+  --control-key-text: #f8fafc;
+  --primary-btn-bg: #111827;
+  --primary-btn-text: #f9fafb;
+  --toggle-bg: rgba(255, 255, 255, 0.85);
+  --toggle-text: #0f172a;
+  --tile-gray-bg: #52525b;
+  --tile-yellow-bg: #eab308;
+  --tile-green-bg: #16a34a;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #020817;
+  --foreground: #e2e8f0;
+  --text-muted: #94a3b8;
+  --card-bg: #0b1122;
+  --card-border: #1f2937;
+  --card-shadow: 0 35px 70px rgba(2, 6, 23, 0.75);
+  --accent: #34d399;
+  --accent-strong: #10b981;
+  --menu-gradient-from: #031c17;
+  --menu-gradient-via: #020817;
+  --menu-gradient-to: #010409;
+  --quiz-gradient-from: #010409;
+  --quiz-gradient-to: #03132b;
+  --panel-bg: #05211a;
+  --panel-border: #0c3b2d;
+  --panel-text: #ecfdf5;
+  --tile-front-bg: #1e2433;
+  --tile-front-text: #f8fafc;
+  --key-bg: #0f172a;
+  --key-text: #e2e8f0;
+  --key-muted: #475569;
+  --status-bg: rgba(15, 23, 42, 0.9);
+  --status-border: rgba(51, 65, 85, 0.8);
+  --attempt-text: #94a3b8;
+  --control-key-bg: rgba(148, 163, 184, 0.25);
+  --control-key-text: #f8fafc;
+  --primary-btn-bg: #10b981;
+  --primary-btn-text: #052e16;
+  --toggle-bg: rgba(15, 23, 42, 0.65);
+  --toggle-text: #f8fafc;
+  --tile-gray-bg: #27272a;
+  --tile-yellow-bg: #b45309;
+  --tile-green-bg: #047857;
 }
 
 @theme inline {
@@ -12,17 +81,210 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.menu-screen {
+  background-image: linear-gradient(
+    180deg,
+    var(--menu-gradient-from),
+    var(--menu-gradient-via),
+    var(--menu-gradient-to)
+  );
+}
+
+.menu-title {
+  color: var(--foreground);
+}
+
+.menu-subtitle,
+.menu-description,
+.game-subtitle,
+.attempt-stats {
+  color: var(--text-muted);
+}
+
+.menu-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  color: var(--foreground);
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.menu-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-strong);
+  box-shadow: 0 35px 60px rgba(0, 0, 0, 0.15);
+}
+
+.menu-card-label {
+  color: var(--text-muted);
+  display: block;
+  transition: color 200ms ease;
+}
+
+.menu-card-title {
+  color: var(--accent);
+  transition: color 200ms ease;
+}
+
+.menu-card:hover .menu-card-label,
+.menu-card:hover .menu-card-title {
+  color: var(--accent-strong);
+}
+
+.quiz-screen {
+  background-image: linear-gradient(
+    180deg,
+    var(--quiz-gradient-from),
+    var(--quiz-gradient-to)
+  );
+}
+
+.game-shell {
+  color: var(--foreground);
+}
+
+.status-panel {
+  background-color: var(--status-bg);
+  border: 1px solid var(--status-border);
+  color: var(--foreground);
+}
+
+.keypad-panel {
+  background-color: var(--panel-bg);
+  border-color: var(--panel-border);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);
+  color: var(--panel-text);
+}
+
+.code-display {
+  color: var(--panel-text);
+  letter-spacing: 0.25em;
+}
+
+.primary-btn {
+  background-color: var(--primary-btn-bg);
+  color: var(--primary-btn-text);
+  transition: opacity 200ms ease;
+}
+
+.primary-btn:not(:disabled):hover {
+  opacity: 0.85;
+}
+
+.control-key {
+  background-color: var(--control-key-bg);
+  color: var(--control-key-text);
+  transition: opacity 200ms ease;
+}
+
+.control-key:not(:disabled):hover {
+  opacity: 0.9;
+}
+
+.tile-front,
+.tile-back {
+  background-color: var(--tile-front-bg);
+  color: var(--tile-front-text);
+}
+
+.tile-back {
+  border: 1px solid transparent;
+}
+
+.tile-back-green {
+  background-color: var(--tile-green-bg);
+  color: #f8fafc;
+}
+
+.tile-back-yellow {
+  background-color: var(--tile-yellow-bg);
+  color: #1c1917;
+}
+
+.tile-back-gray {
+  background-color: var(--tile-gray-bg);
+  color: #f8fafc;
+}
+
+.digit-key {
+  background-color: var(--key-bg);
+  color: var(--key-text);
+  border: 1px solid transparent;
+  transition: transform 180ms ease, background-color 180ms ease;
+}
+
+.digit-key-unused {
+  border-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .digit-key-unused {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.digit-key-green {
+  background-color: var(--tile-green-bg);
+  color: #f8fafc;
+}
+
+.digit-key-yellow {
+  background-color: var(--tile-yellow-bg);
+  color: #1c1917;
+}
+
+.digit-key-gray {
+  background-color: var(--tile-gray-bg);
+  color: #f8fafc;
+}
+
+.digit-key:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.floating-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.theme-toggle,
+.home-button {
+  background-color: var(--toggle-bg);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.2);
+  color: var(--toggle-text);
+  backdrop-filter: blur(18px);
+  cursor: pointer;
+}
+
+[data-theme="dark"] .theme-toggle,
+[data-theme="dark"] .home-button {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.home-button {
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.home-button:hover {
+  transform: translateY(-1px);
+}
+
+.home-icon {
+  display: block;
+}
+
+.theme-toggle-thumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .flip-tile {
