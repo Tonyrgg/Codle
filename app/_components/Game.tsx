@@ -94,6 +94,12 @@ export function Game() {
   const currentRef = useRef(current);
   const lockedRef = useRef(locked);
 
+  const [revealRowIndex, setRevealRowIndex] = useState<number | null>(null);
+  const [revealStep, setRevealStep] = useState<number>(-1); // -1..3
+  const [revealedRowMax, setRevealedRowMax] = useState<number>(-1); // righe già definitivamente rivelate
+
+  const timeoutsRef = useRef<number[]>([]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
 
@@ -180,10 +186,23 @@ export function Game() {
         return;
       }
 
-      setAttempts((prev) => [
-        ...prev,
-        { guess: value, bulls: data.bulls, cows: data.cows, marks: data.marks },
-      ]);
+      setAttempts((prev) => {
+        const rowIdx = prev.length; // indice della nuova riga
+        const next = [
+          ...prev,
+          {
+            guess: value,
+            bulls: data.bulls,
+            cows: data.cows,
+            marks: data.marks,
+          },
+        ];
+
+        // avvia animazione sulla riga appena aggiunta
+        startReveal(rowIdx);
+
+        return next;
+      });
       setCurrent("");
 
       if (data.win) {
@@ -199,6 +218,37 @@ export function Game() {
       setIsSubmitting(false);
     }
   }
+
+  function clearRevealTimers() {
+    timeoutsRef.current.forEach((t) => window.clearTimeout(t));
+    timeoutsRef.current = [];
+  }
+
+  function startReveal(rowIdx: number) {
+    clearRevealTimers();
+
+    setRevealRowIndex(rowIdx);
+    setRevealStep(-1);
+
+    const delays = [50, 170, 290, 410]; // step 0..3
+    delays.forEach((d, step) => {
+      const id = window.setTimeout(() => setRevealStep(step), d);
+      timeoutsRef.current.push(id);
+    });
+
+    // fine animazione: “consolida” la riga come rivelata
+    const endId = window.setTimeout(() => {
+      setRevealedRowMax(rowIdx);
+      setRevealRowIndex(null);
+      setRevealStep(-1);
+    }, 560);
+
+    timeoutsRef.current.push(endId);
+  }
+
+  useEffect(() => {
+    return () => clearRevealTimers();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -225,7 +275,7 @@ export function Game() {
           }));
 
         setAttempts(mapped);
-
+        setRevealedRowMax(mapped.length - 1);
         const alreadyWon = mapped.some((a) => a.bulls === LENGTH);
         const outOfTries = mapped.length >= MAX;
         setLocked(alreadyWon || outOfTries);
@@ -306,16 +356,35 @@ export function Game() {
         {rows.map((row, i) => (
           <div key={i} className="flex items-center gap-3">
             <div className="grid grid-cols-4 gap-2">
-              {row.chars.map((ch, j) => (
-                <div
-                  key={j}
-                  className={`flex h-12 w-12 items-center justify-center rounded font-mono text-xl font-semibold ${cellClass(
-                    row.marks?.[j],
-                  )}`}
-                >
-                  {ch}
-                </div>
-              ))}
+              {row.chars.map((ch, j) => {
+                const mark = row.marks?.[j];
+
+                const flipped =
+                  // righe già consolidate
+                  i <= revealedRowMax ||
+                  // riga in reveal: flip progressivo cella per cella
+                  (revealRowIndex === i && revealStep >= j);
+
+                return (
+                  <div key={j} className="flip-tile h-12 w-12">
+                    <div
+                      className={`flip-inner ${flipped ? "flip-reveal" : ""}`}
+                    >
+                      {/* FRONT (neutro) */}
+                      <div className="flip-face rounded font-mono text-xl font-semibold bg-zinc-200 text-zinc-900">
+                        {ch}
+                      </div>
+
+                      {/* BACK (colorato) */}
+                      <div
+                        className={`flip-face flip-back rounded font-mono text-xl font-semibold ${cellClass(mark)}`}
+                      >
+                        {ch}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="w-20 text-sm text-zinc-600">
