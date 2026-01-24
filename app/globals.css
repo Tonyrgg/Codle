@@ -170,7 +170,7 @@
 }
 
 .keypad-grid {
-  grid-template-columns: repeat(3, minmax(3.6rem, auto));
+  grid-template-columns: repeat(5, minmax(3.6rem, auto));
 }
 
 .floating-actions {
