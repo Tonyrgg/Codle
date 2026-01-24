@@ -1,12 +1,7 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CODE_LENGTH_GLOBAL, MAX_ATTEMPTS_GLOBAL } from "../lib/config";
 
 type Mark = "green" | "yellow" | "gray";
 
@@ -44,8 +39,8 @@ type GuessResponse =
     }
   | { ok: false; error: string };
 
-const LENGTH = 4;
-const MAX = 8;
+const LENGTH = CODE_LENGTH_GLOBAL;
+const MAX = MAX_ATTEMPTS_GLOBAL;
 const PLACEHOLDER = "-";
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -94,9 +89,8 @@ function keyClass(state: KeyState) {
 export function Game() {
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState("");
-  const [status, setStatus] = useState("");
+  const [toasts, setToasts] = useState<{ id: number; message: string }[]>([]);
 
-  // tentativi in UI (i piu' recenti avranno marks perche' arrivano da /api/guess)
   const [attempts, setAttempts] = useState<
     { guess: string; bulls: number; cows: number; marks?: Mark[] }[]
   >([]);
@@ -111,6 +105,8 @@ export function Game() {
   const [revealedRowMax, setRevealedRowMax] = useState<number>(-1); // righe gia' definitivamente rivelate
 
   const timeoutsRef = useRef<number[]>([]);
+  const toastTimersRef = useRef<Record<number, number>>({});
+  const toastIdRef = useRef(0);
 
   const clearRevealTimers = useCallback(() => {
     timeoutsRef.current.forEach((t) => window.clearTimeout(t));
@@ -138,11 +134,37 @@ export function Game() {
 
       timeoutsRef.current.push(endId);
     },
-    [clearRevealTimers]
+    [clearRevealTimers],
   );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+
+  const pushToast = useCallback((message: string) => {
+    toastIdRef.current += 1;
+    const id = toastIdRef.current;
+    setToasts((prev) => [...prev, { id, message }]);
+    const timer = window.setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+      window.clearTimeout(toastTimersRef.current[id]);
+      delete toastTimersRef.current[id];
+    }, 3200);
+    toastTimersRef.current[id] = timer;
+  }, []);
+
+  const clearToastTimers = useCallback(() => {
+    Object.values(toastTimersRef.current).forEach((timer) =>
+      window.clearTimeout(timer),
+    );
+    toastTimersRef.current = {};
+  }, []);
+
+  const showToastMessage = useCallback(
+    (message: string) => {
+      pushToast(message);
+    },
+    [pushToast],
+  );
 
   useEffect(() => {
     currentRef.current = current;
@@ -206,11 +228,10 @@ export function Game() {
       if (isSubmittingRef.current || locked) return;
 
       if (value.length !== LENGTH) {
-        setStatus("Inserisci 4 cifre.");
+        showToastMessage("Inserisci 4 cifre.");
         return;
       }
 
-      setStatus("");
       setIsSubmitting(true);
 
       try {
@@ -223,7 +244,7 @@ export function Game() {
         const data: GuessResponse = await res.json();
 
         if (!data.ok) {
-          setStatus(data.error || "Errore invio tentativo");
+          showToastMessage(data.error || "Errore invio tentativo");
           return;
         }
 
@@ -247,18 +268,18 @@ export function Game() {
 
         if (data.win) {
           setLocked(true);
-          setStatus("Hai vinto.");
+          showToastMessage("Hai vinto.");
         } else if (data.attemptNumber >= MAX) {
           setLocked(true);
-          setStatus("Tentativi terminati per oggi.");
+          showToastMessage("Tentativi terminati per oggi.");
         }
       } catch (error) {
-        setStatus(getErrorMessage(error, "Errore imprevisto"));
+        showToastMessage(getErrorMessage(error, "Errore imprevisto"));
       } finally {
         setIsSubmitting(false);
       }
     },
-    [locked, startReveal]
+    [locked, showToastMessage, startReveal],
   );
 
   useEffect(() => {
@@ -268,13 +289,12 @@ export function Game() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      setStatus("");
       try {
         const res = await fetch("/api/today", { cache: "no-store" });
         const data: TodayResponse = await res.json();
 
         if (!data.ok) {
-          setStatus(data.error || "Errore caricamento stato");
+          showToastMessage(data.error || "Errore caricamento stato");
           return;
         }
 
@@ -295,15 +315,15 @@ export function Game() {
         const outOfTries = mapped.length >= MAX;
         setLocked(alreadyWon || outOfTries);
 
-        if (alreadyWon) setStatus("Hai gia' vinto oggi.");
-        else if (outOfTries) setStatus("Tentativi terminati per oggi.");
+        if (alreadyWon) showToastMessage("Hai gia' vinto oggi.");
+        else if (outOfTries) showToastMessage("Tentativi terminati per oggi.");
       } catch (error) {
-        setStatus(getErrorMessage(error, "Errore imprevisto"));
+        showToastMessage(getErrorMessage(error, "Errore imprevisto"));
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [showToastMessage]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -311,11 +331,7 @@ export function Game() {
       // Se l'utente sta scrivendo in un input/textarea, non interferire
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
-      if (
-        tag === "input" ||
-        tag === "textarea" ||
-        target?.isContentEditable
-      )
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable)
         return;
 
       if (lockedRef.current) return;
@@ -334,7 +350,7 @@ export function Game() {
         // submit usando lo stato piu' aggiornato
         const value = currentRef.current;
         if (value.length !== LENGTH) {
-          setStatus("Inserisci 4 cifre.");
+          showToastMessage("Inserisci 4 cifre.");
           return;
         }
         // Chiamiamo submit con value esplicito (vedi step 4)
@@ -345,29 +361,24 @@ export function Game() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [submitValue]);
+  }, [showToastMessage, submitValue]);
 
   useEffect(() => {
     isSubmittingRef.current = isSubmitting;
   }, [isSubmitting]);
 
+  useEffect(() => {
+    return () => {
+      clearToastTimers();
+    };
+  }, [clearToastTimers]);
+
   return (
-    <div className="game-shell mx-auto max-w-md p-4">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold">Codle</h1>
-        <div className="game-subtitle text-sm">
-          {loading ? "Caricamento..." : date ? `Data: ${date}` : ""}
-        </div>
-      </header>
-
-      {status ? (
-        <div className="status-panel mb-3 rounded p-2 text-sm">{status}</div>
-      ) : null}
-
-      <section className="grid gap-2">
+    <div className="game-shell relative mx-auto flex w-full max-w-[520px] flex-col items-center gap-6 px-4 text-slate-100 sm:px-0">
+      <section className="game-board relative flex w-full flex-col gap-2.5">
         {rows.map((row, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <div className="grid grid-cols-4 gap-2">
+          <div key={i} className="flex items-center justify-center">
+            <div className="grid grid-cols-4 gap-2.5">
               {row.chars.map((ch, j) => {
                 const mark = row.marks?.[j];
 
@@ -378,18 +389,18 @@ export function Game() {
                   (revealRowIndex === i && revealStep >= j);
 
                 return (
-                  <div key={j} className="flip-tile h-12 w-12">
+                  <div key={j} className="flip-tile h-12 w-12 sm:h-14 sm:w-14">
                     <div
                       className={`flip-inner ${flipped ? "flip-reveal" : ""}`}
                     >
                       {/* FRONT (neutro) */}
-                      <div className="flip-face rounded font-mono text-xl font-semibold tile-front">
+                      <div className="flip-face rounded-xl font-mono text-xl font-semibold tile-front">
                         {ch}
                       </div>
 
                       {/* BACK (colorato) */}
                       <div
-                        className={`flip-face flip-back rounded font-mono text-xl font-semibold ${cellClass(mark)}`}
+                        className={`flip-face flip-back rounded-xl font-mono text-xl font-semibold ${cellClass(mark)}`}
                       >
                         {ch}
                       </div>
@@ -398,70 +409,82 @@ export function Game() {
                 );
               })}
             </div>
-
-            <div className="attempt-stats w-20 text-sm">
-              {i < attempts.length ? (
-                <div>
-                  <div>V: {row.bulls}</div>
-                  <div>G: {row.cows}</div>
-                </div>
-              ) : null}
-            </div>
           </div>
         ))}
       </section>
 
-      <section className="keypad-panel mt-4 rounded border p-3">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="code-display font-mono text-lg">
-            {current.padEnd(LENGTH, PLACEHOLDER)}
+      <section className="keypad-panel mt-8 w-full max-w-[254px] rounded-[28px] border px-4 py-5 text-slate-100 shadow-2xl">
+        <div className="mb-4 flex justify-center">
+          <div className="flex w-full max-w-sm items-stretch gap-0">
+            <div className="glass-input flex flex-1 items-center justify-center gap-2 rounded-l-[20px] rounded-r-none border-r-0 px-3 py-1.5">
+              <span className="text-xs uppercase tracking-[0.55em] text-slate-400">
+                #
+              </span>
+              <div className="code-display font-mono text-lg font-semibold">
+                {current.padEnd(LENGTH, PLACEHOLDER)}
+              </div>
+            </div>
+            <button
+              className="submit-chip flex items-center justify-center rounded-r-[20px] rounded-l-none border-l px-3 py-1.5 text-base disabled:opacity-50"
+              onClick={() => submitValue(current)}
+              disabled={locked || isSubmitting || current.length !== LENGTH}
+              aria-label="Invio"
+            >
+              <span aria-hidden="true" className="leading-none">
+                ⏎
+              </span>
+            </button>
           </div>
-          <button
-            className="primary-btn rounded px-3 py-2 text-sm font-medium disabled:opacity-50"
-            onClick={() => submitValue(current)}
-            disabled={locked || isSubmitting || current.length !== LENGTH}
-          >
-            {isSubmitting ? "Inviando..." : "Invio"}
-          </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
+        <div className="keypad-wrapper mt-1 flex justify-center">
+          <div className="keypad-grid inline-grid grid-cols-3 gap-2.5">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
+              <button
+                key={n}
+                className={`rounded-2xl px-3 py-3 text-xl font-semibold disabled:opacity-60 ${keyClass(keyStates[n])}`}
+                onClick={() => addDigit(n)}
+                disabled={locked}
+              >
+                {n}
+              </button>
+            ))}
+
             <button
-              key={n}
-              className={`rounded p-3 text-lg font-semibold disabled:opacity-50 ${keyClass(keyStates[n])}`}
-              onClick={() => addDigit(n)}
+              className="control-key rounded-2xl px-3 py-3 text-xs font-semibold uppercase tracking-wide disabled:opacity-60"
+              onClick={backspace}
               disabled={locked}
             >
-              {n}
+              Canc
             </button>
-          ))}
 
-          <button
-            className="control-key rounded p-3 text-sm font-medium disabled:opacity-50"
-            onClick={backspace}
-            disabled={locked}
-          >
-            Canc
-          </button>
+            <button
+              className={`rounded-2xl p-3 text-xl font-semibold disabled:opacity-60 ${keyClass(keyStates["0"])}`}
+              onClick={() => addDigit("0")}
+              disabled={locked}
+            >
+              0
+            </button>
 
-          <button
-            className={`rounded p-3 text-lg font-semibold disabled:opacity-50 ${keyClass(keyStates["0"])}`}
-            onClick={() => addDigit("0")}
-            disabled={locked}
-          >
-            0
-          </button>
-
-          <button
-            className="control-key rounded p-3 text-sm font-medium disabled:opacity-50"
-            onClick={() => setCurrent("")}
-            disabled={locked}
-          >
-            Clear
-          </button>
+            <button
+              className="control-key rounded-2xl px-3 py-3 text-xs font-semibold uppercase tracking-wide disabled:opacity-60"
+              onClick={() => setCurrent("")}
+              disabled={locked}
+            >
+              Clear
+            </button>
+          </div>
         </div>
       </section>
+       {toasts.length ? (
+        <div className="toast-layer" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className="status-toast">
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
