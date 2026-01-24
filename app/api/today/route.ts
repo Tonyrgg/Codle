@@ -1,3 +1,4 @@
+import { CODE_LENGTH_GLOBAL, MAX_ATTEMPTS_GLOBAL } from "@/app/lib/config";
 import { evaluate } from "@/app/lib/evaluate";
 import { gameDateRome, dailySecret } from "@/app/lib/secret";
 import { createSupabaseRouteClient } from "@/app/lib/supabase/routeClient";
@@ -7,8 +8,8 @@ import type { NextRequest } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const LENGTH = 4;
-const MAX_ATTEMPTS = 8;
+const LENGTH = CODE_LENGTH_GLOBAL;
+const MAX_ATTEMPTS = MAX_ATTEMPTS_GLOBAL;
 
 export async function GET(request: NextRequest) {
   const { supabase, applyCookies } = createSupabaseRouteClient(request);
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
   let secret: string;
   try {
     secret = dailySecret(date);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     return applyCookies(
       NextResponse.json(
