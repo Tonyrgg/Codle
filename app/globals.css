@@ -170,7 +170,7 @@
 }
 
 .keypad-grid {
-  grid-template-columns: repeat(3, minmax(3.6rem, auto));
+  grid-template-columns: repeat(5, minmax(3.6rem, auto));
 }
 
 .floating-actions {
@@ -387,6 +387,10 @@ body::before {
     0 16px 50px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+}
+
+.keypad-controls {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px;
 }
 
 .submit-chip {
