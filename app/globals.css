@@ -389,6 +389,10 @@ body::before {
   -webkit-backdrop-filter: blur(14px);
 }
 
+.keypad-controls {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px;
+}
+
 .submit-chip {
   background: rgba(21, 32, 56, 0.60);
   border: 1px solid rgba(124, 58, 237, 0.28);

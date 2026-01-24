@@ -42,18 +42,7 @@ type GuessResponse =
 const LENGTH = CODE_LENGTH_GLOBAL;
 const MAX = MAX_ATTEMPTS_GLOBAL;
 const PLACEHOLDER = "-";
-const DIGIT_KEYS = [
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
-  "7",
-  "8",
-  "9",
-  "0",
-] as const;
+const DIGIT_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
@@ -428,7 +417,7 @@ export function Game() {
       <section className="keypad-panel mt-8 w-full max-w-92.5 rounded-[28px] border px-4 py-5 text-slate-100 shadow-2xl">
         <div className="mb-4 flex justify-center">
           <div className="flex w-full max-w-sm items-stretch gap-0">
-            <div className="glass-input flex flex-1 items-center justify-center gap-2 rounded-l-[20px] rounded-r-none border-r-0 px-3 py-1.5">
+            <div className="glass-input flex flex-1 items-center justify-center gap-2 rounded-2xl border-r-0 px-3 py-1.5">
               <span className="text-xs uppercase tracking-[0.55em] text-slate-400">
                 #
               </span>
@@ -436,16 +425,6 @@ export function Game() {
                 {current.padEnd(LENGTH, PLACEHOLDER)}
               </div>
             </div>
-            <button
-              className="submit-chip flex items-center justify-center rounded-r-[20px] rounded-l-none border-l px-3 py-1.5 text-base disabled:opacity-50"
-              onClick={() => submitValue(current)}
-              disabled={locked || isSubmitting || current.length !== LENGTH}
-              aria-label="Invio"
-            >
-              <span aria-hidden="true" className="leading-none">
-                ⏎
-              </span>
-            </button>
           </div>
         </div>
 
@@ -464,7 +443,7 @@ export function Game() {
               ))}
             </div>
 
-            <div className="keypad-controls grid w-full grid-cols-2 gap-3">
+            <div className="keypad-controls grid w-full gap-3">
               <button
                 className="control-key rounded-2xl px-3 py-3 h-14 w-full text-xs font-semibold uppercase tracking-wide disabled:opacity-60"
                 onClick={backspace}
@@ -479,11 +458,21 @@ export function Game() {
               >
                 Clear
               </button>
+              <button
+                className="submit-chip flex items-center justify-center rounded-2xl h-14 w-14 border-l px-3 py-1.5 text-base disabled:opacity-50"
+                onClick={() => submitValue(current)}
+                disabled={locked || isSubmitting || current.length !== LENGTH}
+                aria-label="Invio"
+              >
+                <span aria-hidden="true" className="leading-none">
+                  ⏎
+                </span>
+              </button>
             </div>
           </div>
         </div>
       </section>
-       {toasts.length ? (
+      {toasts.length ? (
         <div className="toast-layer" aria-live="polite">
           {toasts.map((toast) => (
             <div key={toast.id} className="status-toast">
@@ -495,4 +484,3 @@ export function Game() {
     </div>
   );
 }
-
