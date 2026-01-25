@@ -14,28 +14,48 @@ export type Move = {
   created_at: string;
 };
 
+type Row = {
+  chars: string[];
+  marks?: Mark[];
+  bulls: number;
+  cows: number;
+};
+
 type KeyState = "green" | "yellow" | "gray" | "unused";
 
 function upgradeKeyState(prev: KeyState, next: KeyState): KeyState {
-  const rank: Record<KeyState, number> = { unused: 0, gray: 1, yellow: 2, green: 3 };
+  const rank: Record<KeyState, number> = {
+    unused: 0,
+    gray: 1,
+    yellow: 2,
+    green: 3,
+  };
   return rank[next] > rank[prev] ? next : prev;
 }
 
 function keyClass(state: KeyState) {
   switch (state) {
-    case "green": return "digit-key digit-key-green";
-    case "yellow": return "digit-key digit-key-yellow";
-    case "gray": return "digit-key digit-key-gray";
-    default: return "digit-key digit-key-unused";
+    case "green":
+      return "digit-key digit-key-green";
+    case "yellow":
+      return "digit-key digit-key-yellow";
+    case "gray":
+      return "digit-key digit-key-gray";
+    default:
+      return "digit-key digit-key-unused";
   }
 }
 
 function cellClass(mark?: Mark) {
   switch (mark) {
-    case "green": return "tile-back tile-back-green";
-    case "yellow": return "tile-back tile-back-yellow";
-    case "gray": return "tile-back tile-back-gray";
-    default: return "tile-back";
+    case "green":
+      return "tile-back tile-back-green";
+    case "yellow":
+      return "tile-back tile-back-yellow";
+    case "gray":
+      return "tile-back tile-back-gray";
+    default:
+      return "tile-back";
   }
 }
 
@@ -71,34 +91,43 @@ export default function DuelBoard({
   const [revealedRowMax, setRevealedRowMax] = useState<number>(-1);
   const timeoutsRef = useRef<number[]>([]);
 
-  useEffect(() => { currentRef.current = current; }, [current]);
-  useEffect(() => { canPlayRef.current = canPlay; }, [canPlay]);
-  useEffect(() => { isSubmittingRef.current = isSubmitting; }, [isSubmitting]);
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
+  useEffect(() => {
+    canPlayRef.current = canPlay;
+  }, [canPlay]);
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
 
   const clearRevealTimers = useCallback(() => {
     timeoutsRef.current.forEach((t) => window.clearTimeout(t));
     timeoutsRef.current = [];
   }, []);
 
-  const startReveal = useCallback((rowIdx: number) => {
-    clearRevealTimers();
-    setRevealRowIndex(rowIdx);
-    setRevealStep(-1);
-
-    const delays = [50, 170, 290, 410];
-    delays.forEach((d, step) => {
-      const id = window.setTimeout(() => setRevealStep(step), d);
-      timeoutsRef.current.push(id);
-    });
-
-    const endId = window.setTimeout(() => {
-      setRevealedRowMax(rowIdx);
-      setRevealRowIndex(null);
+  const startReveal = useCallback(
+    (rowIdx: number) => {
+      clearRevealTimers();
+      setRevealRowIndex(rowIdx);
       setRevealStep(-1);
-    }, 560);
 
-    timeoutsRef.current.push(endId);
-  }, [clearRevealTimers]);
+      const delays = [50, 170, 290, 410];
+      delays.forEach((d, step) => {
+        const id = window.setTimeout(() => setRevealStep(step), d);
+        timeoutsRef.current.push(id);
+      });
+
+      const endId = window.setTimeout(() => {
+        setRevealedRowMax(rowIdx);
+        setRevealRowIndex(null);
+        setRevealStep(-1);
+      }, 560);
+
+      timeoutsRef.current.push(endId);
+    },
+    [clearRevealTimers],
+  );
 
   useEffect(() => () => clearRevealTimers(), [clearRevealTimers]);
 
@@ -124,15 +153,16 @@ export default function DuelBoard({
       for (let i = 0; i < digits.length; i++) {
         const digit = digits[i];
         const mark = m.marks?.[i];
-        const state: KeyState = mark === "green" ? "green" : mark === "yellow" ? "yellow" : "gray";
+        const state: KeyState =
+          mark === "green" ? "green" : mark === "yellow" ? "yellow" : "gray";
         map[digit] = upgradeKeyState(map[digit], state);
       }
     }
     return map;
   }, [moves]);
 
-  const rows = useMemo(() => {
-    const filled = moves.map((m) => {
+  const rows = useMemo<Row[]>(() => {
+    const filled: Row[] = moves.map((m) => {
       const chars = m.guess.padEnd(LENGTH, " ").slice(0, LENGTH).split("");
       return { chars, marks: m.marks, bulls: m.bulls, cows: m.cows };
     });
@@ -140,11 +170,11 @@ export default function DuelBoard({
     while (filled.length < MAX) {
       filled.push({
         chars: Array(LENGTH).fill(""),
-        marks: undefined as Mark[] | undefined,
         bulls: 0,
         cows: 0,
       });
     }
+
     return filled;
   }, [moves]);
 
@@ -164,27 +194,30 @@ export default function DuelBoard({
     setCurrent("");
   };
 
-  const submit = useCallback(async (value: string) => {
-    if (!canPlayRef.current) return;
-    if (!onSubmitGuess) return;
+  const submit = useCallback(
+    async (value: string) => {
+      if (!canPlayRef.current) return;
+      if (!onSubmitGuess) return;
 
-    if (isSubmittingRef.current) return; // mutex
-    if (value.length !== LENGTH) {
-      setStatus("Inserisci 4 cifre.");
-      return;
-    }
+      if (isSubmittingRef.current) return; // mutex
+      if (value.length !== LENGTH) {
+        setStatus("Inserisci 4 cifre.");
+        return;
+      }
 
-    setStatus("");
-    setIsSubmitting(true);
-    try {
-      await onSubmitGuess(value);
-      setCurrent("");
-    } catch (e: any) {
-      setStatus(e?.message || "Errore invio guess");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [onSubmitGuess]);
+      setStatus("");
+      setIsSubmitting(true);
+      try {
+        await onSubmitGuess(value);
+        setCurrent("");
+      } catch (e: any) {
+        setStatus(e?.message || "Errore invio guess");
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [onSubmitGuess],
+  );
 
   // tastiera fisica
   useEffect(() => {
@@ -194,7 +227,8 @@ export default function DuelBoard({
 
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable)
+        return;
 
       if (e.key >= "0" && e.key <= "9") {
         setCurrent((prev) => (prev.length < LENGTH ? prev + e.key : prev));
@@ -220,14 +254,19 @@ export default function DuelBoard({
       <header className="mb-4 flex items-baseline justify-between">
         <div>
           <div className="text-lg font-semibold text-white">{title}</div>
-          {subtitle ? <div className="text-xs text-slate-300">{subtitle}</div> : null}
+          {subtitle ? (
+            <div className="text-xs text-slate-300">{subtitle}</div>
+          ) : null}
         </div>
         <div className="text-xs text-slate-300">
-          Tentativi: <span className="text-slate-100">{moves.length}/{MAX}</span>
+          Tentativi:{" "}
+          <span className="text-slate-100">
+            {moves.length}/{MAX}
+          </span>
         </div>
       </header>
 
-      {(!canPlay && disabledReason) ? (
+      {!canPlay && disabledReason ? (
         <div className="mb-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-200">
           {disabledReason}
         </div>
@@ -253,11 +292,15 @@ export default function DuelBoard({
 
                 return (
                   <div key={j} className="flip-tile h-14 w-14 sm:h-16 sm:w-16">
-                    <div className={`flip-inner ${flipped ? "flip-reveal" : ""}`}>
+                    <div
+                      className={`flip-inner ${flipped ? "flip-reveal" : ""}`}
+                    >
                       <div className="flip-face rounded-xl font-mono text-2xl font-semibold tile-front">
                         {ch}
                       </div>
-                      <div className={`flip-face flip-back rounded-xl font-mono text-2xl font-semibold ${cellClass(mark)}`}>
+                      <div
+                        className={`flip-face flip-back rounded-xl font-mono text-2xl font-semibold ${cellClass(mark)}`}
+                      >
                         {ch}
                       </div>
                     </div>
@@ -283,7 +326,9 @@ export default function DuelBoard({
         <section className="keypad-panel mt-6 w-full rounded-[32px] border px-6 py-6 text-slate-100 shadow-2xl">
           <div className="mb-5 flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="glass-input flex w-full max-w-lg items-center justify-center gap-4 rounded-[28px] border px-6 py-3">
-              <span className="text-xs uppercase tracking-[0.55em] text-slate-400">#</span>
+              <span className="text-xs uppercase tracking-[0.55em] text-slate-400">
+                #
+              </span>
               <div className="code-display font-mono text-2xl font-semibold">
                 {current.padEnd(LENGTH, "-")}
               </div>
@@ -300,7 +345,7 @@ export default function DuelBoard({
 
           <div className="keypad-wrapper flex justify-center">
             <div className="keypad-grid inline-grid grid-cols-3 gap-3">
-              {["1","2","3","4","5","6","7","8","9"].map((n) => (
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
                 <button
                   key={n}
                   className={`rounded-2xl px-3 py-4 text-2xl font-semibold disabled:opacity-60 ${keyClass(keyStates[n])}`}
