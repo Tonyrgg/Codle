@@ -465,7 +465,7 @@ export function Game() {
                 aria-label="Invio"
               >
                 <span aria-hidden="true" className="leading-none">
-                  ⏎
+                  ⤶
                 </span>
               </button>
             </div>
