@@ -7,9 +7,7 @@ export default function Home() {
         Menu principale
       </div>
 
-      <h1 className="menu-title text-4xl font-semibold">
-        Benvenuto in Codle
-      </h1>
+      <h1 className="menu-title text-4xl font-semibold">Benvenuto in Codle</h1>
       <p className="menu-description mt-2 max-w-lg text-base">
         Preparati a mettere alla prova la tua logica. Entra nel quiz giornaliero
         quando sei pronto.
@@ -25,6 +23,12 @@ export default function Home() {
         <div className="menu-card-title mt-4 text-5xl font-black tracking-[0.3em]">
           CODLE
         </div>
+      </Link>
+      <Link
+        href="/duel"
+        className="submit-chip rounded-full px-6 py-3 text-xs font-semibold uppercase tracking-[0.5em]"
+      >
+        Duel
       </Link>
     </main>
   );
