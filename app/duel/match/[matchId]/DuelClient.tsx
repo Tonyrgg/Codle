@@ -233,7 +233,7 @@ export default function DuelClient({ matchId }: { matchId: string }) {
           await refreshState();
         },
       )
-      .subscribe((st) => console.log("[RT subscribe status]", st));
+      .subscribe();
 
     return () => {
       isUnmounted = true;
