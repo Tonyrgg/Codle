@@ -2,25 +2,14 @@ import { NextResponse } from "next/server";
 import { requireUserId } from "@/app/lib/supabase/auth";
 import { supabaseAdmin } from "@/app/lib/supabase/admin";
 
-export async function POST(req: Request) {
+async function handleState(matchId: string) {
   const userId = await requireUserId();
-  if (!userId)
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized" },
-      { status: 401 },
-    );
-
-  const { matchId } = await req.json().catch(() => ({}));
-  if (!matchId || typeof matchId !== "string") {
-    return NextResponse.json(
-      { ok: false, error: "Missing matchId" },
-      { status: 400 },
-    );
+  if (!userId) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
   const admin = supabaseAdmin();
 
-  // verifica player e prendi seat
   const { data: me } = await admin
     .from("match_players")
     .select("seat")
@@ -28,11 +17,9 @@ export async function POST(req: Request) {
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (!me)
-    return NextResponse.json(
-      { ok: false, error: "Not in match" },
-      { status: 403 },
-    );
+  if (!me) {
+    return NextResponse.json({ ok: false, error: "Not in match" }, { status: 403 });
+  }
 
   const { data: match } = await admin
     .from("matches")
@@ -59,9 +46,7 @@ export async function POST(req: Request) {
     .eq("match_id", matchId);
 
   const mySecretSet = (secrets ?? []).some((s) => s.user_id === userId);
-  const opponentSecretSet = opponent
-    ? (secrets ?? []).some((s) => s.user_id === opponent)
-    : false;
+  const opponentSecretSet = opponent ? (secrets ?? []).some((s) => s.user_id === opponent) : false;
 
   return NextResponse.json({
     ok: true,
@@ -75,4 +60,21 @@ export async function POST(req: Request) {
       count: (secrets ?? []).length,
     },
   });
+}
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const matchId = searchParams.get("matchId");
+  if (!matchId || typeof matchId !== "string") {
+    return NextResponse.json({ ok: false, error: "Missing matchId" }, { status: 400 });
+  }
+  return handleState(matchId);
+}
+
+export async function POST(req: Request) {
+  const { matchId } = await req.json().catch(() => ({}));
+  if (!matchId || typeof matchId !== "string") {
+    return NextResponse.json({ ok: false, error: "Missing matchId" }, { status: 400 });
+  }
+  return handleState(matchId);
 }

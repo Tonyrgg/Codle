@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { supabaseBrowser } from "@/app/lib/supabase/client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DuelBoard from "./DuelBoard";
+import { supabaseBrowser } from "@/app/lib/supabase/client";
 
 type Mark = "green" | "yellow" | "gray";
+
 type Move = {
   id: string;
   by_user_id: string;
@@ -21,7 +22,7 @@ type StateResp =
       match: {
         id: string;
         code: string;
-        status: string;
+        status: "waiting" | "secrets" | "active" | "finished" | string;
         turn_user_id: string | null;
         winner_user_id: string | null;
       };
@@ -36,58 +37,237 @@ type StateResp =
     }
   | { ok: false; error: string };
 
+function sortMoves(m: Move[]) {
+  return [...m].sort((a, b) =>
+    String(a.created_at).localeCompare(String(b.created_at)),
+  );
+}
+
 export default function DuelClient({ matchId }: { matchId: string }) {
+  const supabase = useMemo(() => supabaseBrowser(), []);
+
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
   const [meId, setMeId] = useState<string>("");
   const [opponentId, setOpponentId] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [turnUserId, setTurnUserId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("");
   const [winner, setWinner] = useState<string | null>(null);
+
   const [moves, setMoves] = useState<Move[]>([]);
   const [matchCode, setMatchCode] = useState<string>("");
+
   const [mySecretSet, setMySecretSet] = useState(false);
   const [opponentSecretSet, setOpponentSecretSet] = useState(false);
 
   const [secretInput, setSecretInput] = useState("");
   const [settingSecret, setSettingSecret] = useState(false);
+
   const [uiToast, setUiToast] = useState("");
-  const isMyTurn = turnUserId && meId ? turnUserId === meId : false;
 
-  const banner = useMemo(() => {
-    if (winner)
-      return meId && winner === meId
-        ? "Hai vinto la partita."
-        : "Hai perso la partita.";
-    if (status === "waiting")
-      return "In attesa di un secondo giocatore. Condividi il codice stanza.";
-    if (status === "secrets")
-      return "Entrambi devono impostare un segreto (4 cifre).";
-    if (status === "active")
-      return isMyTurn
-        ? "È il tuo turno: inserisci una combinazione."
-        : "Turno avversario: attendi.";
-    return "Stato non riconosciuto.";
-  }, [winner, status, isMyTurn, meId]);
+  const isMyTurn = !!turnUserId && !!meId && turnUserId === meId;
 
-  async function ensureAnonClient() {
-    const supabase = supabaseBrowser();
-    const { data } = await supabase.auth.getSession();
-
+  // ---- Auth: deve avvenire PRIMA dello state e PRIMA del realtime ----
+  const ensureAnon = useCallback(async () => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) console.warn("[auth getSession error]", error);
     if (data.session) return;
 
-    // se non c'è sessione nel browser, crea anon
     const res = await supabase.auth.signInAnonymously();
-    if (res.error) {
-      console.error("Anon sign-in failed:", res.error);
-    }
-  }
+    if (res.error) throw res.error;
+  }, [supabase]);
 
-  async function submitSecret() {
+  // ---- State refresh (single source of truth) ----
+  const refreshingRef = useRef(false);
+
+  const refreshState = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+
+    try {
+      const res = await fetch(`/api/duel/state?matchId=${matchId}`, {
+        cache: "no-store",
+      });
+
+      const text = await res.text();
+      if (!text) {
+        console.warn("[state] empty response", res.status);
+        return;
+      }
+
+      let data: StateResp;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error(
+          "[state] non-json response",
+          res.status,
+          text.slice(0, 200),
+        );
+        return;
+      }
+
+      if (!res.ok || !data.ok) {
+        console.warn("[state] error", res.status, data);
+        return;
+      }
+
+      setStatus(data.match.status);
+      setTurnUserId(data.match.turn_user_id ?? null);
+      setWinner(data.match.winner_user_id ?? null);
+      setMatchCode(data.match.code ?? "");
+
+      setMeId(data.me.userId);
+      setOpponentId(data.opponentUserId ?? null);
+
+      setMoves(sortMoves(data.moves ?? []));
+
+      setMySecretSet(!!data.secrets?.mySecretSet);
+      setOpponentSecretSet(!!data.secrets?.opponentSecretSet);
+    } finally {
+      setTimeout(() => {
+        refreshingRef.current = false;
+      }, 120);
+    }
+  }, [matchId]);
+
+  useEffect(() => {
+    if (!matchId) return;
+    if (winner) return;
+    if (status !== "waiting" && status !== "secrets") return;
+
+    const id = window.setInterval(() => {
+      refreshState();
+    }, 1200);
+
+    return () => window.clearInterval(id);
+  }, [matchId, status, winner, refreshState]);
+
+  // ---- Bootstrap: ensureAnon -> refreshState ----
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLoading(true);
+        setErr("");
+
+        await ensureAnon();
+        const { data } = await supabase.auth.getSession();
+        if (!data.session)
+          throw new Error("Session not available after anon sign-in");
+        setAuthReady(true);
+        if (cancelled) return;
+
+        await refreshState();
+      } catch (e: any) {
+        if (!cancelled) setErr(e?.message || "Errore inizializzazione");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ensureAnon, refreshState]);
+
+  // ---- Realtime: cleanup corretto ----
+  useEffect(() => {
+    if (!authReady) return;
+    let isUnmounted = false;
+
+    const channel = supabase
+      .channel(`duel:${matchId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "matches",
+          filter: `id=eq.${matchId}`,
+        },
+        async () => {
+          if (isUnmounted) return;
+          await refreshState();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "moves",
+          filter: `match_id=eq.${matchId}`,
+        },
+        async (payload: any) => {
+          console.log("[RT moves INSERT payload]", payload);
+          await refreshState();
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "moves" },
+        (payload) => console.log("[RT moves NO FILTERR]", payload),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "match_secrets",
+          filter: `match_id=eq.${matchId}`,
+        },
+        async () => {
+          if (isUnmounted) return;
+          await refreshState();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "match_players",
+          filter: `match_id=eq.${matchId}`,
+        },
+        async () => {
+          console.log("[RT match_players insert]");
+          await refreshState();
+        },
+      )
+      .subscribe((st) => console.log("[RT subscribe status]", st));
+
+    return () => {
+      isUnmounted = true;
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, matchId, refreshState, authReady]);
+
+  const toast = useCallback((msg: string, ms = 1200) => {
+    setUiToast(msg);
+    window.setTimeout(() => setUiToast(""), ms);
+  }, []);
+
+  const copy = useCallback(
+    async (text: string) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast("Copiato.");
+      } catch {
+        toast("Impossibile copiare (permessi browser).", 1600);
+      }
+    },
+    [toast],
+  );
+
+  const submitSecret = useCallback(async () => {
     if (settingSecret) return;
+
     if (secretInput.length !== 4) {
-      setUiToast("Il segreto deve essere di 4 cifre.");
-      setTimeout(() => setUiToast(""), 1200);
+      toast("Il segreto deve essere di 4 cifre.");
       return;
     }
 
@@ -102,140 +282,30 @@ export default function DuelClient({ matchId }: { matchId: string }) {
       if (!res.ok || !data.ok)
         throw new Error(data?.error || `HTTP ${res.status}`);
 
-      setMySecretSet(true);
       setSecretInput("");
-      setUiToast("Segreto impostato.");
-      setTimeout(() => setUiToast(""), 1200);
+      toast("Segreto impostato.");
 
-      // ottimistico: se il server attiva subito, aggiorna UI
-      if (data.status) setStatus(data.status);
-      if (data.turnUserId) setTurnUserId(data.turnUserId);
+      // riallinea sempre dopo write
+      await refreshState();
     } catch (e: any) {
-      setUiToast(e?.message || "Errore impostazione segreto");
-      setTimeout(() => setUiToast(""), 1600);
+      toast(e?.message || "Errore impostazione segreto", 1600);
     } finally {
       setSettingSecret(false);
     }
-  }
-
-  async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setUiToast("Copiato.");
-      setTimeout(() => setUiToast(""), 1200);
-    } catch {
-      setUiToast("Impossibile copiare (permessi browser).");
-      setTimeout(() => setUiToast(""), 1600);
-    }
-  }
-
-  // bootstrap
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setErr("");
-      const res = await fetch("/api/duel/state", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ matchId }),
-      });
-      const data: StateResp = await res.json();
-      if (!data.ok) {
-        setErr(data.error || "Errore stato match");
-        setLoading(false);
-        return;
-      }
-      setMeId(data.me.userId);
-      setOpponentId(data.opponentUserId);
-      setMoves(data.moves);
-      setTurnUserId(data.match.turn_user_id);
-      setStatus(data.match.status);
-      setWinner(data.match.winner_user_id);
-      setLoading(false);
-      setMatchCode(data.match.code || "");
-      setMySecretSet(!!data.secrets?.mySecretSet);
-      setOpponentSecretSet(!!data.secrets?.opponentSecretSet);
-    })();
-  }, [matchId]);
-
-  // realtime subscriptions
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      await ensureAnonClient();
-      if (cancelled) return;
-
-      const supabase = supabaseBrowser();
-
-      const ch = supabase
-        .channel(`duel:${matchId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "moves",
-            filter: `match_id=eq.${matchId}`,
-          },
-          (payload) => {
-            console.log("[RT moves]", payload);
-            if (payload.eventType === "INSERT")
-              setMoves((prev) => [...prev, payload.new as any]);
-          },
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "matches",
-            filter: `id=eq.${matchId}`,
-          },
-          (payload) => {
-            console.log("[RT matches UPDATE]", payload);
-            const row = payload.new as any;
-            setTurnUserId(row.turn_user_id ?? null);
-            setStatus(row.status ?? "");
-            setWinner(row.winner_user_id ?? null);
-          },
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "match_secrets",
-            filter: `match_id=eq.${matchId}`,
-          },
-          (payload) => {
-            const row = payload.new as any;
-            if (row.user_id === meId) setMySecretSet(true);
-            else setOpponentSecretSet(true);
-          },
-        )
-
-        .subscribe((status) => console.log("[RT subscribe status]", status));
-
-      // cleanup
-      return () => supabase.removeChannel(ch);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [matchId]);
+  }, [settingSecret, secretInput, matchId, toast, refreshState]);
 
   const myMoves = useMemo(
-    () => moves.filter((m) => m.by_user_id === meId),
+    () => (meId ? moves.filter((m) => m.by_user_id === meId) : []),
     [moves, meId],
   );
+
   const oppMoves = useMemo(
     () => (opponentId ? moves.filter((m) => m.by_user_id === opponentId) : []),
     [moves, opponentId],
   );
 
   const canPlay = status === "active" && !winner && isMyTurn;
+
   const disabledReason = winner
     ? "Partita finita."
     : status !== "active"
@@ -244,8 +314,52 @@ export default function DuelClient({ matchId }: { matchId: string }) {
         ? "Non è il tuo turno."
         : "";
 
+  const banner = useMemo(() => {
+    if (winner)
+      return winner === meId
+        ? "Hai vinto la partita."
+        : "Hai perso la partita.";
+    if (status === "waiting")
+      return "In attesa di un secondo giocatore. Condividi il codice stanza.";
+    if (status === "secrets")
+      return "Entrambi devono impostare un segreto (4 cifre).";
+    if (status === "active")
+      return isMyTurn
+        ? "È il tuo turno: inserisci una combinazione."
+        : "Turno avversario: attendi.";
+    return "Stato non riconosciuto.";
+  }, [winner, meId, status, isMyTurn]);
+
+  if (loading) {
+    return (
+      <div className="game-shell mx-auto w-full max-w-[980px] px-4 py-10 text-slate-100">
+        <div className="status-panel rounded-2xl border px-4 py-3 text-center text-sm font-medium">
+          Caricamento...
+        </div>
+      </div>
+    );
+  }
+
+  if (err) {
+    return (
+      <div className="game-shell mx-auto w-full max-w-[980px] px-4 py-10 text-slate-100">
+        <div className="status-panel rounded-2xl border px-4 py-3 text-center text-sm font-medium">
+          {err}
+        </div>
+        <div className="mt-4 flex justify-center">
+          <button
+            className="submit-chip rounded-2xl px-5 py-3 text-xs font-semibold uppercase tracking-[0.35em]"
+            onClick={refreshState}
+          >
+            Riprova
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="game-shell mx-auto w-full max-w-[980px] px-4 py-8 text-slate-100">
       <header className="mb-5 flex w-full items-center justify-between">
         <div>
           <div className="text-2xl font-semibold text-white">Codle Duel</div>
@@ -283,6 +397,7 @@ export default function DuelClient({ matchId }: { matchId: string }) {
           </a>
         </div>
       </header>
+
       <div className="mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100">
         {banner}
         <div className="mt-2 text-xs text-slate-300">
@@ -300,15 +415,16 @@ export default function DuelClient({ matchId }: { matchId: string }) {
           {uiToast}
         </div>
       ) : null}
+
       {!winner && !mySecretSet ? (
         <div className="keypad-panel mb-6 w-full rounded-[32px] border px-6 py-6 shadow-2xl">
           <div className="mb-2 text-sm font-semibold text-slate-100">
             Imposta il tuo segreto
           </div>
           <div className="mb-4 text-xs text-slate-300">
-            4 cifre. L’avversario non lo vedrà mai. (Per ora non imponiamo
-            regole speciali.)
+            4 cifre. L’avversario non lo vedrà mai.
           </div>
+
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="glass-input flex w-full max-w-lg items-center justify-center gap-4 rounded-[28px] border px-6 py-3">
               <span className="text-xs uppercase tracking-[0.55em] text-slate-400">
@@ -335,33 +451,36 @@ export default function DuelClient({ matchId }: { matchId: string }) {
           </div>
         </div>
       ) : null}
-      <DuelBoard
-        title="TU"
-        subtitle={canPlay ? "È il tuo turno" : "Attendi"}
-        moves={myMoves as any}
-        canPlay={canPlay}
-        disabledReason={disabledReason}
-        onSubmitGuess={async (guess) => {
-          const res = await fetch("/api/duel/guess", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ matchId, guess }),
-          });
-          const data = await res.json();
-          if (!res.ok || !data.ok)
-            throw new Error(data?.error || `HTTP ${res.status}`);
-          // opzionale: aggiornamento ottimistico del turno
-          if (data.nextTurnUserId) setTurnUserId(data.nextTurnUserId);
-        }}
-      />
 
-      <DuelBoard
-        title="AVVERSARIO"
-        subtitle="Le sue mosse (live)"
-        moves={oppMoves as any}
-        canPlay={false}
-        disabledReason="Solo lettura"
-      />
+      <div className="grid gap-6 md:grid-cols-2">
+        <DuelBoard
+          title="TU"
+          subtitle={canPlay ? "È il tuo turno" : "Attendi"}
+          moves={myMoves as any}
+          canPlay={canPlay}
+          disabledReason={disabledReason}
+          onSubmitGuess={async (guess) => {
+            const res = await fetch("/api/duel/guess", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ matchId, guess }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok)
+              throw new Error(data?.error || `HTTP ${res.status}`);
+
+            await refreshState();
+          }}
+        />
+
+        <DuelBoard
+          title="AVVERSARIO"
+          subtitle="Le sue mosse (live)"
+          moves={oppMoves as any}
+          canPlay={false}
+          disabledReason="Solo lettura"
+        />
+      </div>
     </div>
   );
 }
