@@ -354,19 +354,19 @@ export default function DuelClient({ matchId }: { matchId: string }) {
   }
 
   return (
-    <div className="game-shell mx-auto w-full max-w-[980px] px-4 py-8 text-slate-100">
-      <header className="mb-5 flex w-full items-center justify-between">
-        <div>
+    <div className="game-shell mx-auto w-full max-w-[1100px] px-4 py-8 text-slate-100">
+      <header className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <div className="text-2xl font-semibold text-white">Codle Duel</div>
-          <div className="text-xs text-slate-300">
+          <div className="mt-1 truncate text-xs text-slate-300">
             Match: <span className="font-mono">{matchId}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
           {matchCode ? (
             <button
-              className="control-key rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+              className="control-key rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide"
               onClick={() => copy(matchCode)}
               title="Copia codice stanza"
             >
@@ -375,7 +375,7 @@ export default function DuelClient({ matchId }: { matchId: string }) {
           ) : null}
 
           <button
-            className="control-key rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+            className="control-key rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide"
             onClick={() =>
               copy(`${window.location.origin}/duel/match/${matchId}`)
             }
@@ -386,42 +386,73 @@ export default function DuelClient({ matchId }: { matchId: string }) {
 
           <a
             href="/duel"
-            className="submit-chip rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em]"
+            className="submit-chip rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em]"
           >
             Esci
           </a>
         </div>
       </header>
 
-      <div className="mb-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100">
-        {banner}
-        <div className="mt-2 text-xs text-slate-300">
-          Segreti: tu{" "}
-          <span className="font-semibold">{mySecretSet ? "OK" : "—"}</span> ·
-          avversario{" "}
-          <span className="font-semibold">
-            {opponentSecretSet ? "OK" : "—"}
-          </span>
+      <div className="mt-5 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm font-semibold text-slate-100">{banner}</div>
+
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-200">
+              {winner
+                ? "FINE"
+                : status === "waiting"
+                  ? "WAITING"
+                  : status === "secrets"
+                    ? "SECRETS"
+                    : status === "active"
+                      ? isMyTurn
+                        ? "YOUR TURN"
+                        : "OPP TURN"
+                      : "UNKNOWN"}
+            </span>
+
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-200">
+              Tu: <span className="font-mono">{mySecretSet ? "OK" : "--"}</span>
+            </span>
+
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-200">
+              Opp:{" "}
+              <span className="font-mono">
+                {opponentSecretSet ? "OK" : "--"}
+              </span>
+            </span>
+          </div>
         </div>
       </div>
 
       {uiToast ? (
-        <div className="status-panel mb-4 w-full rounded-2xl border px-4 py-3 text-center text-sm font-medium">
+        <div className="status-panel mt-4 w-full rounded-2xl border px-4 py-3 text-center text-sm font-medium">
           {uiToast}
         </div>
       ) : null}
 
       {!winner && !mySecretSet ? (
-        <div className="keypad-panel mb-6 w-full rounded-[32px] border px-6 py-6 shadow-2xl">
-          <div className="mb-2 text-sm font-semibold text-slate-100">
-            Imposta il tuo segreto
-          </div>
-          <div className="mb-4 text-xs text-slate-300">
-            4 cifre. L’avversario non lo vedrà mai.
+        <div className="keypad-panel mt-4 w-full rounded-[28px] border px-5 py-5 shadow-2xl">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-100">
+                Imposta il tuo segreto
+              </div>
+              <div className="mt-1 text-xs text-slate-300">
+                4 cifre. L’avversario non lo vedrà mai.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-300">
+              {opponentSecretSet
+                ? "Avversario pronto"
+                : "Avversario non pronto"}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="glass-input flex w-full max-w-lg items-center justify-center gap-4 rounded-[28px] border px-6 py-3">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="glass-input flex w-full max-w-[420px] items-center justify-center gap-4 rounded-[24px] border px-6 py-3">
               <span className="text-xs uppercase tracking-[0.55em] text-slate-400">
                 SECRET
               </span>
@@ -447,34 +478,43 @@ export default function DuelClient({ matchId }: { matchId: string }) {
         </div>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <DuelBoard
-          title="TU"
-          subtitle={canPlay ? "È il tuo turno" : "Attendi"}
-          moves={myMoves as any}
-          canPlay={canPlay}
-          disabledReason={disabledReason}
-          onSubmitGuess={async (guess) => {
-            const res = await fetch("/api/duel/guess", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ matchId, guess }),
-            });
-            const data = await res.json();
-            if (!res.ok || !data.ok)
-              throw new Error(data?.error || `HTTP ${res.status}`);
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <div
+          className={`rounded-[28px] border bg-white/5 p-4 shadow-2xl ${
+            canPlay
+              ? "border-emerald-400/30 ring-2 ring-emerald-400/20"
+              : "border-white/10"
+          }`}
+        >
+          <DuelBoard
+            title="TU"
+            subtitle={canPlay ? "È il tuo turno" : "Attendi"}
+            moves={myMoves as any}
+            canPlay={canPlay}
+            disabledReason={disabledReason}
+            onSubmitGuess={async (guess) => {
+              const res = await fetch("/api/duel/guess", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ matchId, guess }),
+              });
+              const data = await res.json();
+              if (!res.ok || !data.ok)
+                throw new Error(data?.error || `HTTP ${res.status}`);
+              await refreshState();
+            }}
+          />
+        </div>
 
-            await refreshState();
-          }}
-        />
-
-        <DuelBoard
-          title="AVVERSARIO"
-          subtitle="Le sue mosse (live)"
-          moves={oppMoves as any}
-          canPlay={false}
-          disabledReason="Solo lettura"
-        />
+        <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 shadow-2xl">
+          <DuelBoard
+            title="AVVERSARIO"
+            subtitle="Le sue mosse (live)"
+            moves={oppMoves as any}
+            canPlay={false}
+            disabledReason="Solo lettura"
+          />
+        </div>
       </div>
     </div>
   );

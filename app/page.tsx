@@ -26,9 +26,14 @@ export default function Home() {
       </Link>
       <Link
         href="/duel"
-        className="submit-chip rounded-full px-6 py-3 text-xs font-semibold uppercase tracking-[0.5em]"
+        className="menu-card group mt-4 w-full max-w-sm rounded-3xl px-10 py-16 text-center transition"
       >
-        Duel
+        <div className="menu-card-label text-xs uppercase tracking-[0.5em]">
+          Sfida un amico
+        </div>
+        <div className="menu-card-title mt-4 text-5xl font-black tracking-[0.3em]">
+          DUEL
+        </div>
       </Link>
     </main>
   );
