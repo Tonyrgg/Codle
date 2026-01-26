@@ -202,15 +202,10 @@ export default function DuelClient({ matchId }: { matchId: string }) {
           table: "moves",
           filter: `match_id=eq.${matchId}`,
         },
-        async (payload: any) => {
-          console.log("[RT moves INSERT payload]", payload);
+        async () => {
+          if (isUnmounted) return;
           await refreshState();
         },
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "moves" },
-        (payload) => console.log("[RT moves NO FILTERR]", payload),
       )
       .on(
         "postgres_changes",
