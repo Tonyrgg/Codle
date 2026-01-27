@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -32,13 +32,19 @@ type StateResp =
     }
   | { ok: false; error: string };
 
+type DragData =
+  | { type: "bottle"; key: string }
+  | { type: "slotitem"; index: number }
+  | { type: "slot"; index: number }
+  | { type: "rack" };
+
 function Bottle({ colorKey }: { colorKey: string }) {
   const c = BOX_PALETTE.find((x) => x.key === colorKey)!;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: `bottle:${colorKey}`,
-      data: { type: "bottle", key: colorKey },
+      data: { type: "bottle", key: colorKey } satisfies DragData,
     });
 
   const style: React.CSSProperties = {
@@ -76,7 +82,7 @@ function Slot({
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `slot-${index}`,
-    data: { type: "slot", index },
+    data: { type: "slot", index } satisfies DragData,
   });
 
   const c = filledColorKey
@@ -91,7 +97,7 @@ function Slot({
     isDragging,
   } = useDraggable({
     id: `slotitem:${index}`,
-    data: { type: "slotitem", index, key: filledColorKey },
+    data: { type: "slotitem", index } satisfies DragData,
     disabled: !filledColorKey,
   });
 
@@ -113,7 +119,6 @@ function Slot({
     >
       {c ? (
         <>
-          {/* X per rimuovere e riportare sotto */}
           <button
             type="button"
             onClick={onClear}
@@ -123,7 +128,6 @@ function Slot({
             ✕
           </button>
 
-          {/* Draggable nello slot */}
           <div
             ref={setDragRef}
             style={style}
@@ -146,7 +150,7 @@ function Slot({
 function Rack() {
   const { setNodeRef, isOver } = useDroppable({
     id: "rack",
-    data: { type: "rack" },
+    data: { type: "rack" } satisfies DragData,
   });
 
   return (
@@ -179,7 +183,6 @@ export default function BoxMatchClient({
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [won, setWon] = useState(false);
 
-  // slot state: array di color keys (o null)
   const [slots, setSlots] = useState<(string | null)[]>(Array(len).fill(null));
 
   const showToast = useCallback((m: string, ms = 1200) => {
@@ -201,8 +204,8 @@ export default function BoxMatchClient({
     });
     const text = await res.text();
     if (!text) throw new Error(`Empty response (${res.status})`);
-    const data: StateResp = JSON.parse(text);
 
+    const data: StateResp = JSON.parse(text);
     if (!res.ok || !data.ok)
       throw new Error((data as any)?.error || `HTTP ${res.status}`);
 
@@ -210,11 +213,11 @@ export default function BoxMatchClient({
     setAttempts(data.attempts ?? []);
     setWon(!!data.won);
 
-    // riallinea lunghezza slot se cambia difficoltà
     setSlots((prev) => {
       const next = Array(data.length).fill(null) as (string | null)[];
-      for (let i = 0; i < Math.min(prev.length, next.length); i++)
+      for (let i = 0; i < Math.min(prev.length, next.length); i++) {
         next[i] = prev[i];
+      }
       return next;
     });
   }, [difficulty]);
@@ -239,7 +242,6 @@ export default function BoxMatchClient({
     };
   }, [ensureAnon, refresh]);
 
-  // palette usata: prendiamo i primi N colori della palette (sono già 10, e N <= 10)
   const colorsForThisGame = useMemo(
     () => BOX_PALETTE.slice(0, len).map((c) => c.key),
     [len],
@@ -256,53 +258,57 @@ export default function BoxMatchClient({
   );
 
   const allFilled = slots.every((s) => !!s);
+
+  const clearSlot = useCallback((idx: number) => {
+    setSlots((prev) => {
+      const next = [...prev];
+      next[idx] = null;
+      return next;
+    });
+  }, []);
+
   function handleDragEnd(e: DragEndEvent) {
     const over = e.over;
     if (!over) return;
 
-    const activeData = e.active.data.current as any;
-    const overData = over.data.current as any;
+    const activeData = (e.active.data.current ?? null) as DragData | null;
+    const overData = (over.data.current ?? null) as DragData | null;
 
-    // DROP SUL RACK: se trascino uno slotitem, lo svuoto
+    // Drop sul rack: solo gli item dentro gli slot possono tornare giù
     if (over.id === "rack") {
       if (activeData?.type === "slotitem") {
-        const fromIdx = Number(activeData.index);
-        if (!Number.isFinite(fromIdx)) return;
-        setSlots((prev) => {
-          const next = [...prev];
-          next[fromIdx] = null;
-          return next;
-        });
+        clearSlot(activeData.index);
       }
       return;
     }
 
-    // DROP SU UNO SLOT
+    // Drop su uno slot
     if (overData?.type === "slot") {
-      const toIdx = Number(overData.index);
-      if (!Number.isFinite(toIdx)) return;
+      const toIdx = overData.index;
 
-      // 1) dal POOL -> SLOT
+      // pool -> slot
       if (activeData?.type === "bottle") {
-        const key = String(activeData.key);
+        const key = activeData.key;
+
         setSlots((prev) => {
           const next = [...prev];
 
-          // se lo stesso colore era già in uno slot, lo tolgo
+          // se già usata in un altro slot, la togliamo prima (no duplicati)
           const fromIdx = next.findIndex((x) => x === key);
           if (fromIdx >= 0) next[fromIdx] = null;
 
-          // se target pieno, lo butto fuori (tornerà disponibile sotto automaticamente)
+          // set nel target (qualsiasi cosa c'era torna disponibile sotto)
           next[toIdx] = key;
           return next;
         });
         return;
       }
 
-      // 2) slot -> slot (swap)
+      // slot -> slot (swap)
       if (activeData?.type === "slotitem") {
-        const fromIdx = Number(activeData.index);
-        if (!Number.isFinite(fromIdx)) return;
+        const fromIdx = activeData.index;
+
+        if (fromIdx === toIdx) return;
 
         setSlots((prev) => {
           const next = [...prev];
@@ -323,7 +329,6 @@ export default function BoxMatchClient({
 
     const guess = slots as string[];
 
-    // check no duplicates (dovrebbe essere garantito dalla UI)
     const uniq = new Set(guess);
     if (uniq.size !== guess.length)
       return showToast("Non puoi duplicare un colore.");
@@ -432,26 +437,19 @@ export default function BoxMatchClient({
                 key={i}
                 index={i}
                 filledColorKey={s}
-                onClear={() =>
-                  setSlots((prev) => {
-                    const next = [...prev];
-                    next[i] = null;
-                    return next;
-                  })
-                }
+                onClear={() => clearSlot(i)}
               />
             ))}
           </div>
 
-          <Rack id="rack" />
+          {/* ✅ Rack NON prende props */}
+          <Rack />
 
+          {/* ✅ Sotto: SOLO bottiglie disponibili (non duplicano quelle sopra) */}
           <div className="mt-4 flex flex-wrap gap-3">
-            {/* Bottiglie disponibili */}
-            <div className="mt-4 flex flex-wrap gap-3">
-              {available.map((key) => (
-                <Bottle key={key} id={key} colorKey={key} />
-              ))}
-            </div>
+            {available.map((key) => (
+              <Bottle key={key} colorKey={key} />
+            ))}
           </div>
         </DndContext>
       </div>
@@ -463,7 +461,7 @@ export default function BoxMatchClient({
           </div>
           <div className="text-sm text-slate-300">
             {won ? (
-              <span className="text-emerald-300 font-semibold">
+              <span className="font-semibold text-emerald-300">
                 Completato ✅
               </span>
             ) : (
