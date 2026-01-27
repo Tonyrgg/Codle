@@ -2,39 +2,66 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="menu-screen flex min-h-screen flex-col items-center justify-center p-6 text-center">
-      <div className="menu-subtitle mb-8 text-sm uppercase tracking-[0.4em]">
-        Menu principale
+    <main className="menu-screen px-6 py-12 text-center">
+      <div className="vignette" aria-hidden="true" />
+      <div className="menu-shell mx-auto flex w-full max-w-4xl flex-col items-center">
+        <div className="menu-subtitle text-xs uppercase tracking-[0.5em] text-cyan-200">
+          Hub principale
+        </div>
+        <div className="mt-4 flex items-center justify-center gap-4 text-amber-300 text-4xl">
+          <span aria-hidden="true">{"\u{1F3C6}"}</span>
+          <h1 className="menu-title text-5xl">Codle Nexus</h1>
+          <span aria-hidden="true">{"\u{1F3C6}"}</span>
+        </div>
+        <p className="menu-description mt-4 max-w-2xl text-base">
+          Scegli la tua sfida: affronta il quiz giornaliero oppure invita un amico
+          in un duello neon dove conta ogni cifra.
+        </p>
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 font-mono text-[0.65rem] uppercase tracking-[0.4em] text-slate-200">
+          <span className="menu-chip bg-emerald-500/20 text-emerald-100">
+            Daily Ready
+          </span>
+          <span className="menu-chip bg-violet-500/20 text-violet-100">
+            Duel Live
+          </span>
+          <span className="menu-chip bg-cyan-500/15 text-cyan-200">
+            Arcade HUD
+          </span>
+        </div>
+
+        <div className="menu-actions mt-10 w-full flex-col gap-6 md:grid md:grid-cols-2 md:gap-8">
+          <Link
+            href="/codle"
+            className="menu-card menu-card-primary arcade-shadow flex flex-col items-center px-10 py-16 transition"
+          >
+            <div className="menu-card-label">Entra nel quiz</div>
+            <div className="menu-card-title mt-4 text-5xl font-black">
+              CODLE
+            </div>
+            <p className="mt-4 text-sm text-indigo-100/70">
+              Sfida quotidiana con 4 cifre da scoprire.
+            </p>
+          </Link>
+
+          <Link
+            href="/duel"
+            className="menu-card menu-card-secondary menu-card-duel arcade-shadow flex flex-col items-center px-10 py-16 transition"
+          >
+            <div className="menu-card-label">Sfida un amico</div>
+            <div className="menu-card-title mt-4 text-5xl font-black">
+              DUEL
+            </div>
+            <p className="mt-4 text-sm text-slate-200/70">
+              Match realtime con HUD neon e tastierino arcade.
+            </p>
+          </Link>
+        </div>
+
+        <div className="menu-description mt-10 text-xs uppercase tracking-[0.35em] text-slate-300">
+          © {new Date().getFullYear()} Codle Arcade HUD Edition
+        </div>
       </div>
-
-      <h1 className="menu-title text-4xl font-semibold">Benvenuto in Codle</h1>
-      <p className="menu-description mt-2 max-w-lg text-base">
-        Preparati a mettere alla prova la tua logica. Entra nel quiz giornaliero
-        quando sei pronto.
-      </p>
-
-      <Link
-        href="/codle"
-        className="menu-card group mt-10 w-full max-w-sm rounded-3xl px-10 py-16 text-center transition"
-      >
-        <div className="menu-card-label text-xs uppercase tracking-[0.5em]">
-          Entra nel quiz
-        </div>
-        <div className="menu-card-title mt-4 text-5xl font-black tracking-[0.3em]">
-          CODLE
-        </div>
-      </Link>
-      <Link
-        href="/duel"
-        className="menu-card group mt-4 w-full max-w-sm rounded-3xl px-10 py-16 text-center transition"
-      >
-        <div className="menu-card-label text-xs uppercase tracking-[0.5em]">
-          Sfida un amico
-        </div>
-        <div className="menu-card-title mt-4 text-5xl font-black tracking-[0.3em]">
-          DUEL
-        </div>
-      </Link>
     </main>
   );
 }
