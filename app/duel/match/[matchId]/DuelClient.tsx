@@ -306,7 +306,7 @@ export default function DuelClient({ matchId }: { matchId: string }) {
     : status !== "active"
       ? "In attesa che entrambi scelgano il segreto."
       : !isMyTurn
-        ? "Non è il tuo turno."
+        ? "Non e' il tuo turno."
         : "";
 
   const banner = useMemo(() => {
@@ -320,10 +320,24 @@ export default function DuelClient({ matchId }: { matchId: string }) {
       return "Entrambi devono impostare un segreto (4 cifre).";
     if (status === "active")
       return isMyTurn
-        ? "È il tuo turno: inserisci una combinazione."
+        ? "E' il tuo turno: inserisci una combinazione."
         : "Turno avversario: attendi.";
     return "Stato non riconosciuto.";
   }, [winner, meId, status, isMyTurn]);
+
+  const stageLabel = winner
+    ? winner === meId
+      ? "Victory"
+      : "Defeat"
+    : status === "waiting"
+      ? "Waiting"
+      : status === "secrets"
+        ? "Secrets"
+        : status === "active"
+          ? isMyTurn
+            ? "Your Turn"
+            : "Opp Turn"
+          : "In Progress";
 
   if (loading) {
     return (
@@ -354,28 +368,40 @@ export default function DuelClient({ matchId }: { matchId: string }) {
   }
 
   return (
-    <div className="game-shell mx-auto w-full max-w-[1100px] px-4 py-8 text-slate-100">
-      <header className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="text-2xl font-semibold text-white">Codle Duel</div>
-          <div className="mt-1 truncate text-xs text-slate-300">
-            Match: <span className="font-mono">{matchId}</span>
-          </div>
+    <div className="relative w-full">
+      <div className="vignette" aria-hidden="true" />
+      <div className="game-shell mx-auto w-full max-w-[1200px] px-4 py-10 text-slate-100">
+      <header className="flex flex-col items-center gap-6 text-center">
+        <div className="flex items-center justify-center gap-4 text-3xl text-amber-300">
+          <span aria-hidden="true">{"\u{1F3C6}"}</span>
+          <h1 className="hud-heading text-5xl uppercase tracking-tight text-white drop-shadow-[0_15px_45px_rgba(0,0,0,0.75)]">
+            Codle Duel
+          </h1>
+          <span aria-hidden="true">{"\u{1F3C6}"}</span>
         </div>
-
-        <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-          {matchCode ? (
-            <button
-              className="control-key rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide"
-              onClick={() => copy(matchCode)}
-              title="Copia codice stanza"
-            >
-              Code: <span className="font-mono">{matchCode}</span>
-            </button>
-          ) : null}
-
+        <div className="match-id-display flex flex-wrap items-center justify-center gap-2 font-mono text-[0.65rem] uppercase tracking-[0.45em] text-cyan-300/80">
+          <span>Match ID:</span>
+          <span className="text-white">{matchId}</span>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
           <button
-            className="control-key rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+            type="button"
+            className="arcade-shadow rounded-2xl border border-violet-400/50 bg-[#8B5CF6] px-5 py-3 font-mono text-xs uppercase tracking-[0.4em] text-white/90 transition hover:bg-[#a78bfa] disabled:opacity-50"
+            onClick={() => {
+              if (!matchCode) return;
+              copy(matchCode);
+            }}
+            disabled={!matchCode}
+            title="Copia codice stanza"
+          >
+            <span className="opacity-70">CODE</span>
+            <span className="ml-2 font-bold text-white">
+              {matchCode || "----"}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="arcade-shadow rounded-2xl border border-cyan-200/60 bg-cyan-400 px-5 py-3 font-mono text-xs uppercase tracking-[0.4em] text-slate-900 font-bold"
             onClick={() =>
               copy(`${window.location.origin}/duel/match/${matchId}`)
             }
@@ -383,45 +409,39 @@ export default function DuelClient({ matchId }: { matchId: string }) {
           >
             Copia link
           </button>
-
           <a
             href="/duel"
-            className="submit-chip rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em]"
+            className="arcade-shadow rounded-2xl border border-slate-700/60 bg-slate-800 px-5 py-3 font-mono text-xs uppercase tracking-[0.4em] text-slate-100 transition hover:bg-slate-700"
           >
             Esci
           </a>
         </div>
       </header>
 
-      <div className="mt-5 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-semibold text-slate-100">{banner}</div>
+      <div className="status-panel mt-8 w-full rounded-3xl border px-6 py-6 shadow-2xl">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm font-semibold text-indigo-100">{banner}</p>
 
-          <div className="flex items-center gap-2">
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-200">
-              {winner
-                ? "FINE"
-                : status === "waiting"
-                  ? "WAITING"
-                  : status === "secrets"
-                    ? "SECRETS"
-                    : status === "active"
-                      ? isMyTurn
-                        ? "YOUR TURN"
-                        : "OPP TURN"
-                      : "UNKNOWN"}
-            </span>
+          <div className="flex flex-wrap items-center justify-center gap-3 text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-slate-200">
+            <div className="flex items-center gap-2 rounded-full bg-emerald-500/20 px-4 py-1.5 text-emerald-100">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+              {stageLabel}
+            </div>
 
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-200">
-              Tu: <span className="font-mono">{mySecretSet ? "OK" : "--"}</span>
-            </span>
+            <div className="rounded-lg border border-slate-600/60 bg-slate-900/60 px-4 py-1.5 font-mono">
+              TU: <span className="text-white">{mySecretSet ? "OK" : "---"}</span>
+            </div>
 
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-200">
-              Opp:{" "}
-              <span className="font-mono">
-                {opponentSecretSet ? "OK" : "--"}
+            <div className="arcade-shadow flex h-10 w-10 items-center justify-center rounded-xl bg-orange-400 text-xs font-bold text-slate-900">
+              VS
+            </div>
+
+            <div className="rounded-lg border border-slate-600/60 bg-slate-900/60 px-4 py-1.5 font-mono">
+              OPP:{" "}
+              <span className="text-white">
+                {opponentSecretSet ? "OK" : "---"}
               </span>
-            </span>
+            </div>
           </div>
         </div>
       </div>
@@ -433,27 +453,24 @@ export default function DuelClient({ matchId }: { matchId: string }) {
       ) : null}
 
       {!winner && !mySecretSet ? (
-        <div className="keypad-panel mt-4 w-full rounded-[28px] border px-5 py-5 shadow-2xl">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-slate-100">
-                Imposta il tuo segreto
-              </div>
-              <div className="mt-1 text-xs text-slate-300">
-                4 cifre. L’avversario non lo vedrà mai.
-              </div>
+        <div className="mt-8 rounded-[32px] border-4 border-indigo-500/30 bg-[#3B2EA3] p-6 text-white shadow-[0_30px_80px_rgba(32,9,74,0.5)] glow-purple">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-xl font-semibold uppercase tracking-tight">
+              <span aria-hidden="true" className="text-amber-300">
+                {"\u2728"}
+              </span>
+              <p>
+                Imposta il <span className="text-amber-300">tuo</span> segreto
+              </p>
             </div>
-
-            <div className="flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.25em] text-slate-300">
-              {opponentSecretSet
-                ? "Avversario pronto"
-                : "Avversario non pronto"}
-            </div>
+            <p className="text-sm text-indigo-100/80">
+              4 cifre, tutte diverse. L&apos;avversario non le vedra&apos;.
+            </p>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="glass-input flex w-full max-w-[420px] items-center justify-center gap-4 rounded-[24px] border px-6 py-3">
-              <span className="text-xs uppercase tracking-[0.55em] text-slate-400">
+          <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="glass-input glossy-bar flex w-full max-w-[420px] items-center justify-between gap-6 px-6 py-4">
+              <span className="text-xs uppercase tracking-[0.55em] text-indigo-200/70">
                 SECRET
               </span>
               <input
@@ -461,34 +478,36 @@ export default function DuelClient({ matchId }: { matchId: string }) {
                 onChange={(e) =>
                   setSecretInput(e.target.value.replace(/\D/g, "").slice(0, 4))
                 }
-                className="w-full bg-transparent text-right font-mono text-2xl font-semibold text-white outline-none"
+                className="w-full bg-transparent text-right font-mono text-3xl font-bold tracking-[0.4em] text-white placeholder:text-indigo-200/60 outline-none"
                 placeholder="####"
                 inputMode="numeric"
               />
             </div>
 
             <button
-              className="submit-chip rounded-full px-5 py-3 text-[0.75rem] font-semibold uppercase tracking-[0.45em] disabled:opacity-50"
+              className="submit-chip arcade-shadow rounded-2xl px-8 py-3 text-[0.8rem] font-semibold uppercase tracking-[0.4em] disabled:opacity-40"
               onClick={submitSecret}
               disabled={settingSecret || secretInput.length !== 4}
             >
-              {settingSecret ? "..." : "CONFERMA"}
+              {settingSecret ? "..." : "SET"}
             </button>
+          </div>
+
+          <div className="mt-3 text-xs uppercase tracking-[0.35em] text-indigo-100/80">
+            {opponentSecretSet ? "Avversario pronto" : "Avversario non pronto"}
           </div>
         </div>
       ) : null}
 
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
+      <div className="mt-10 grid gap-8 md:grid-cols-2">
         <div
-          className={`rounded-[28px] border bg-white/5 p-4 shadow-2xl ${
-            canPlay
-              ? "border-emerald-400/30 ring-2 ring-emerald-400/20"
-              : "border-white/10"
-          }`}
+          className={`glow-purple rounded-[36px] border-4 ${
+            canPlay ? "border-indigo-400/70" : "border-indigo-500/30"
+          } bg-slate-900/40 p-1`}
         >
           <DuelBoard
             title="TU"
-            subtitle={canPlay ? "È il tuo turno" : "Attendi"}
+            subtitle={canPlay ? "E' il tuo turno" : "Attendi"}
             moves={myMoves as any}
             canPlay={canPlay}
             disabledReason={disabledReason}
@@ -506,7 +525,7 @@ export default function DuelClient({ matchId }: { matchId: string }) {
           />
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 shadow-2xl">
+        <div className="glow-red rounded-[36px] border-4 border-red-600/40 bg-slate-900/40 p-1">
           <DuelBoard
             title="AVVERSARIO"
             subtitle="Le sue mosse (live)"
@@ -515,6 +534,7 @@ export default function DuelClient({ matchId }: { matchId: string }) {
             disabledReason="Solo lettura"
           />
         </div>
+      </div>
       </div>
     </div>
   );

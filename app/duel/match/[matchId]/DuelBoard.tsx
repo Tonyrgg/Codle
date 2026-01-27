@@ -49,9 +49,9 @@ function keyClass(state: KeyState) {
 function cellClass(mark?: Mark) {
   switch (mark) {
     case "green":
-      return "tile-back tile-back-green";
+      return "tile-back tile-back-green tile-active";
     case "yellow":
-      return "tile-back tile-back-yellow";
+      return "tile-back tile-back-yellow tile-active";
     case "gray":
       return "tile-back tile-back-gray";
     default:
@@ -90,6 +90,17 @@ export default function DuelBoard({
   const [revealStep, setRevealStep] = useState<number>(-1);
   const [revealedRowMax, setRevealedRowMax] = useState<number>(-1);
   const timeoutsRef = useRef<number[]>([]);
+
+  const normalizedTitle = title.toLowerCase();
+  const isOpponentBoard = normalizedTitle.includes("avvers");
+  const headerAccent = isOpponentBoard
+    ? "bg-red-900/20 border-red-500/30"
+    : "bg-indigo-900/20 border-indigo-500/30";
+  const iconColor = isOpponentBoard ? "text-red-300" : "text-indigo-300";
+  const infoChipAccent = isOpponentBoard
+    ? "border-red-500/30 text-red-200"
+    : "border-indigo-500/30 text-indigo-200";
+  const badgeIcon = isOpponentBoard ? "\u2694" : "\u{1F6E1}";
 
   useEffect(() => {
     currentRef.current = current;
@@ -131,7 +142,7 @@ export default function DuelBoard({
 
   useEffect(() => () => clearRevealTimers(), [clearRevealTimers]);
 
-  // aggiorna "righe già rivelate" quando arrivano mosse nuove (realtime)
+  // aggiorna "righe gia' rivelate" quando arrivano mosse nuove (realtime)
   useEffect(() => {
     if (moves.length === 0) {
       setRevealedRowMax(-1);
@@ -250,39 +261,54 @@ export default function DuelBoard({
   }, [submit]);
 
   return (
-    <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-5">
-      <header className="mb-4 flex items-baseline justify-between">
-        <div>
-          <div className="text-lg font-semibold text-white">{title}</div>
-          {subtitle ? (
-            <div className="text-xs text-slate-300">{subtitle}</div>
-          ) : null}
+    <div className="duel-board w-full rounded-[28px] bg-slate-950/40 p-6 text-white shadow-[0_25px_80px_rgba(2,6,23,0.55)] backdrop-blur-xl">
+      <header
+        className={`mb-6 flex flex-col gap-4 rounded-2xl border px-5 py-4 sm:flex-row sm:items-center sm:justify-between ${headerAccent}`}
+      >
+        <div className="flex items-center gap-4">
+          <div
+            className={`flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/30 text-2xl ${iconColor}`}
+          >
+            <span aria-hidden="true">{badgeIcon}</span>
+          </div>
+          <div>
+            <div className="hud-heading text-2xl tracking-tight text-white">
+              {title}
+            </div>
+            {subtitle ? (
+              <div className="text-[0.65rem] uppercase tracking-[0.4em] text-slate-200/80">
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
         </div>
-        <div className="text-xs text-slate-300">
-          Tentativi:{" "}
-          <span className="text-slate-100">
+        <div
+          className={`flex flex-col items-end justify-center rounded-full border px-4 py-2 text-[0.65rem] font-mono uppercase tracking-[0.35em] ${infoChipAccent}`}
+        >
+          <span>Tentativi</span>
+          <span className="text-white">
             {moves.length}/{MAX}
           </span>
         </div>
       </header>
 
       {!canPlay && disabledReason ? (
-        <div className="mb-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-200">
+        <div className="mb-5 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-[0.65rem] font-mono uppercase tracking-[0.35em] text-slate-200">
           {disabledReason}
         </div>
       ) : null}
 
       {status ? (
-        <div className="mb-4 status-panel w-full rounded-2xl border px-4 py-3 text-center text-sm font-medium">
+        <div className="status-panel mb-5 w-full rounded-2xl border px-4 py-3 text-center text-sm font-semibold uppercase tracking-[0.3em] text-indigo-100">
           {status}
         </div>
       ) : null}
 
       {/* board */}
-      <section className="game-board relative flex w-full flex-col gap-3">
+      <section className="game-board relative flex w-full flex-col gap-4">
         {rows.map((row, i) => (
           <div key={i} className="flex items-center gap-4">
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-3 sm:gap-4">
               {row.chars.map((ch, j) => {
                 const mark = row.marks?.[j];
 
@@ -290,18 +316,27 @@ export default function DuelBoard({
                   i <= revealedRowMax ||
                   (revealRowIndex === i && revealStep >= j);
 
+                const displayChar = ch?.trim() ?? "";
+                const isEmptyCell = !displayChar && mark == null;
+
                 return (
-                  <div key={j} className="flip-tile h-14 w-14 sm:h-16 sm:w-16">
+                  <div key={j} className="flip-tile h-12 w-12 sm:h-12 sm:w-12">
                     <div
                       className={`flip-inner ${flipped ? "flip-reveal" : ""}`}
                     >
-                      <div className="flip-face rounded-xl font-mono text-2xl font-semibold tile-front">
-                        {ch}
+                      <div
+                        className={`flip-face rounded-2xl font-mono text-xl font-semibold tile-front ${
+                          isEmptyCell ? "tile-empty" : ""
+                        }`}
+                      >
+                        {displayChar}
                       </div>
                       <div
-                        className={`flip-face flip-back rounded-xl font-mono text-2xl font-semibold ${cellClass(mark)}`}
+                        className={`flip-face flip-back rounded-2xl font-mono text-xl font-semibold ${cellClass(
+                          mark,
+                        )} ${isEmptyCell ? "tile-empty" : ""}`}
                       >
-                        {ch}
+                        {displayChar}
                       </div>
                     </div>
                   </div>
@@ -309,7 +344,7 @@ export default function DuelBoard({
               })}
             </div>
 
-            <div className="attempt-stats w-16 text-[0.65rem] font-semibold uppercase tracking-[0.4em] text-slate-400">
+            <div className="attempt-stats w-20 text-[0.6rem] font-mono uppercase tracking-[0.4em] text-slate-400">
               {i < moves.length ? (
                 <div className="space-y-1">
                   <div>V: {row.bulls}</div>
@@ -321,21 +356,21 @@ export default function DuelBoard({
         ))}
       </section>
 
-      {/* keypad (solo per chi può giocare) */}
+      {/* keypad (solo per chi puo' giocare) */}
       {onSubmitGuess ? (
-        <section className="keypad-panel mt-6 w-full rounded-[32px] border px-6 py-6 text-slate-100 shadow-2xl">
-          <div className="mb-5 flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="glass-input flex w-full max-w-lg items-center justify-center gap-4 rounded-[28px] border px-6 py-3">
+        <section className="keypad-panel mt-8 w-full px-6 py-6 text-slate-100">
+          <div className="mb-6 flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="glass-input glossy-bar flex w-full max-w-lg items-center justify-between gap-4 px-6 py-3">
               <span className="text-xs uppercase tracking-[0.55em] text-slate-400">
                 #
               </span>
-              <div className="code-display font-mono text-2xl font-semibold">
+              <div className="code-display font-mono text-2xl font-semibold tracking-[0.3em]">
                 {current.padEnd(LENGTH, "-")}
               </div>
             </div>
 
             <button
-              className="submit-chip rounded-full px-5 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.5em] disabled:opacity-50"
+              className="arcade-shadow rounded-2xl border border-emerald-500/30 bg-emerald-500/20 px-6 py-3 text-[0.7rem] font-semibold uppercase tracking-[0.5em] text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-40"
               onClick={() => submit(current)}
               disabled={!canPlay || isSubmitting || current.length !== LENGTH}
             >
@@ -348,7 +383,9 @@ export default function DuelBoard({
               {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => (
                 <button
                   key={n}
-                  className={`rounded-2xl px-3 py-4 text-2xl font-semibold disabled:opacity-60 ${keyClass(keyStates[n])}`}
+                  className={`${keyClass(
+                    keyStates[n],
+                  )} arcade-shadow aspect-square w-16 min-w-[3.25rem] text-2xl font-semibold disabled:opacity-40`}
                   onClick={() => addDigit(n)}
                   disabled={!canPlay}
                 >
@@ -357,7 +394,7 @@ export default function DuelBoard({
               ))}
 
               <button
-                className="control-key rounded-2xl px-3 py-4 text-sm font-semibold uppercase tracking-wide disabled:opacity-60"
+                className="control-key arcade-shadow rounded-2xl border border-red-500/30 bg-red-600/20 px-3 py-4 text-xs font-semibold uppercase tracking-[0.4em] text-red-300 disabled:opacity-40"
                 onClick={backspace}
                 disabled={!canPlay}
               >
@@ -365,7 +402,9 @@ export default function DuelBoard({
               </button>
 
               <button
-                className={`rounded-2xl p-3 text-2xl font-semibold disabled:opacity-60 ${keyClass(keyStates["0"])}`}
+                className={`${keyClass(
+                  keyStates["0"],
+                )} arcade-shadow aspect-square w-16 min-w-[3.25rem] text-2xl font-semibold disabled:opacity-40`}
                 onClick={() => addDigit("0")}
                 disabled={!canPlay}
               >
@@ -373,7 +412,7 @@ export default function DuelBoard({
               </button>
 
               <button
-                className="control-key rounded-2xl px-3 py-4 text-sm font-semibold uppercase tracking-wide disabled:opacity-60"
+                className="control-key arcade-shadow rounded-2xl border border-slate-400/30 bg-slate-900/50 px-3 py-4 text-xs font-semibold uppercase tracking-[0.4em] text-slate-200 disabled:opacity-40"
                 onClick={clear}
                 disabled={!canPlay}
               >
