@@ -165,6 +165,47 @@
   box-shadow: 0 0 80px rgba(34, 211, 238, 0.35);
 }
 
+.menu-card-box {
+  background: linear-gradient(145deg, #573d27fb, #b45309);
+  border: 2px solid rgba(249, 211, 115, 0.4);
+  box-shadow: 0 0 50px rgba(250, 204, 21, 0.45);
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-card-box::before,
+.menu-card-box::after {
+  display: none;
+}
+
+.menu-card-box-icon {
+  position: relative;
+  z-index: 1;
+  font-size: 3rem;
+  margin-top: 0.5rem;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.menu-card-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1.25rem;
+}
+
+.menu-card-meta span {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0.25rem 0.9rem;
+  background: rgba(15, 23, 42, 0.6);
+}
+
 .menu-chip {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.15);

@@ -30,7 +30,7 @@ export default function Home() {
           </span>
         </div>
 
-        <div className="menu-actions mt-10 w-full flex-col gap-6 md:grid md:grid-cols-2 md:gap-8">
+        <div className="menu-actions mt-10 w-full flex-col gap-6 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-8">
           <Link
             href="/codle"
             className="menu-card menu-card-primary arcade-shadow flex flex-col items-center px-10 py-16 transition"
@@ -55,6 +55,25 @@ export default function Home() {
             <p className="mt-4 text-sm text-slate-200/70">
               Match realtime con HUD neon e tastierino arcade.
             </p>
+          </Link>
+
+          <Link
+            href="/box"
+            className="menu-card menu-card-box arcade-shadow flex flex-col items-center px-10 py-16 transition"
+          >
+            <div className="menu-card-label">Box Match</div>
+            <div className="menu-card-box-icon">{"\u{1F4E6}"}</div>
+            <div className="menu-card-title mt-4 text-5xl font-black">
+              BOX
+            </div>
+            <p className="mt-4 text-sm text-amber-100/80">
+              Modalità multiround con difficoltà dinamica e tempo limitato.
+            </p>
+            <div className="menu-card-meta text-amber-100/80">
+              <span>Easy</span>
+              <span>Medium</span>
+              <span>Hard</span>
+            </div>
           </Link>
         </div>
 
