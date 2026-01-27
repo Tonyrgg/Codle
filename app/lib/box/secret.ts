@@ -44,17 +44,18 @@ export function dailyBoxSecretKeys(
 
   const len = BOX_DIFFICULTIES[difficulty].length;
 
-  // ✅ usa SOLO i colori permessi per questa difficulty (coerente con la UI)
+  // ✅ POOL ALLINEATO ALLA UI: stessi colori disponibili al player
   const keys = BOX_PALETTE.slice(0, len).map((c) => c.key);
 
-  // shuffle Fisher-Yates
+  // shuffle Fisher-Yates (su pool di dimensione len)
   for (let i = keys.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [keys[i], keys[j]] = [keys[j], keys[i]];
   }
 
-  return keys; // già lunga len
+  return keys; // già len
 }
+
 
 export function correctPositions(guess: string[], secret: string[]) {
   const n = Math.min(guess.length, secret.length);
