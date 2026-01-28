@@ -1,13 +1,9 @@
-import {
-  Inter,
-  Space_Grotesk,
-  JetBrains_Mono,
-} from "next/font/google";
+import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { EnsureAnon } from "./_components/EnsureAnon";
 import { ThemeProvider } from "./_components/ThemeProvider";
 import { ThemeToggle } from "./_components/ThemeToggle";
-
+import { Analytics } from "@vercel/analytics/next";
 const inter = Inter({
   variable: "--font-display",
   subsets: ["latin"],
@@ -36,7 +32,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      
+      <Analytics />
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} ${jetBrainsMono.variable} antialiased hud-bg`}
       >
