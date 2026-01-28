@@ -278,7 +278,7 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
    * ✅ Se il token cambia (refresh/reauth), riallinea il realtime auth.
    */
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       const token = session?.access_token;
       if (token) supabase.realtime.setAuth(token);
     });
