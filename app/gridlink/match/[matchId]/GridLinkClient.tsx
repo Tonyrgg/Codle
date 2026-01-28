@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -8,12 +14,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { supabaseBrowser } from "@/app/lib/supabase/client";
-import {
-  PIECES,
-  PieceId,
-  applyTransform,
-  Cell,
-} from "@/app/lib/gridlink/pieces";
+import { PIECES, PieceId, applyTransform } from "@/app/lib/gridlink/pieces";
 
 type MatchStatus = "waiting" | "active" | "finished" | string;
 
@@ -94,6 +95,7 @@ function ColumnDrop({ col }: { col: number }) {
       className={cls(
         "absolute inset-y-0",
         "w-[calc(100%/9)]",
+        // IMPORTANT: deve poter ricevere pointer events
         "pointer-events-auto",
         isOver ? "bg-white/5" : "",
       )}
@@ -175,39 +177,35 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
   const [moves, setMoves] = useState<
     StateResp extends { ok: true } ? StateResp["moves"] : any
   >([]);
+
   const [toast, setToast] = useState("");
 
-  // transform controls (per il pezzo selezionato)
+  // transform controls
   const [rotation, setRotation] = useState<number>(0);
   const [mirrored, setMirrored] = useState<boolean>(false);
-
   const [selectedInvId, setSelectedInvId] = useState<string | null>(null);
+
+  const [authReady, setAuthReady] = useState(false);
 
   const showToast = useCallback((m: string, ms = 1300) => {
     setToast(m);
     window.setTimeout(() => setToast(""), ms);
   }, []);
 
-  const ensureAnon = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) return;
-    const res = await supabase.auth.signInAnonymously();
-    if (res.error) throw res.error;
-  }, [supabase]);
-
   const refreshingRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
+
     try {
       const res = await fetch(`/api/gridlink/state?matchId=${matchId}`, {
         cache: "no-store",
       });
       const text = await res.text();
       if (!text) throw new Error(`Empty response (${res.status})`);
-      const data: StateResp = JSON.parse(text);
 
+      const data: StateResp = JSON.parse(text);
       if (!res.ok || !data.ok)
         throw new Error((data as any)?.error || `HTTP ${res.status}`);
 
@@ -227,15 +225,42 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
     }
   }, [matchId]);
 
-  // bootstrap
+  /**
+   * ✅ ensureAnon ritorna un access_token valido e lo aggancia a Realtime.
+   * Se non ritorna token, realtime può "SUBSCRIBED" ma non ricevere payload (RLS/JWT).
+   */
+  const ensureAnon = useCallback(async (): Promise<string> => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) console.warn("[auth getSession error]", error);
+
+    if (!data.session) {
+      const res = await supabase.auth.signInAnonymously();
+      if (res.error) throw res.error;
+    }
+
+    const again = await supabase.auth.getSession();
+    const token = again.data.session?.access_token;
+    if (!token) throw new Error("Session not ready");
+    // IMPORTANT: passa token al realtime client
+    supabase.realtime.setAuth(token);
+    return token;
+  }, [supabase]);
+
+  /**
+   * ✅ SINGLE bootstrap (prima avevi due useEffect e una race-condition).
+   */
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       try {
         setLoading(true);
         setErr("");
+
         await ensureAnon();
         if (cancelled) return;
+
+        setAuthReady(true);
         await refresh();
       } catch (e: any) {
         if (!cancelled) setErr(e?.message || "Errore");
@@ -243,16 +268,35 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
   }, [ensureAnon, refresh]);
 
-  // realtime
+  /**
+   * ✅ Se il token cambia (refresh/reauth), riallinea il realtime auth.
+   */
   useEffect(() => {
-    if (!meId) return;
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const token = session?.access_token;
+      if (token) supabase.realtime.setAuth(token);
+    });
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  /**
+   * ✅ Realtime: sottoscrivi SOLO dopo authReady.
+   * Eventi: moves INSERT, matches UPDATE, players INSERT.
+   */
+  useEffect(() => {
+    if (!authReady) return;
+    if (!matchId) return;
 
     let unmounted = false;
+
     const channel = supabase
       .channel(`gridlink:${matchId}`)
       .on(
@@ -263,7 +307,8 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
           table: "gridlink_moves",
           filter: `match_id=eq.${matchId}`,
         },
-        async () => {
+        async (payload: any) => {
+          console.log("[RT moves INSERT]", payload.new);
           if (unmounted) return;
           await refresh();
         },
@@ -276,7 +321,8 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
           table: "gridlink_matches",
           filter: `id=eq.${matchId}`,
         },
-        async () => {
+        async (payload: any) => {
+          console.log("[RT matches UPDATE]", payload.new);
           if (unmounted) return;
           await refresh();
         },
@@ -289,18 +335,22 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
           table: "gridlink_players",
           filter: `match_id=eq.${matchId}`,
         },
-        async () => {
+        async (payload: any) => {
+          console.log("[RT players INSERT]", payload.new);
           if (unmounted) return;
           await refresh();
         },
       )
-      .subscribe();
+      .subscribe((st: any) => {
+        console.log("[RT subscribe status]", st);
+        if (st === "SUBSCRIBED") refresh();
+      });
 
     return () => {
       unmounted = true;
       supabase.removeChannel(channel);
     };
-  }, [supabase, matchId, refresh, meId]);
+  }, [authReady, supabase, matchId, refresh]);
 
   // derived
   const isMyTurn = !!turnUserId && !!meId && turnUserId === meId;
@@ -308,8 +358,6 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
 
   const seatByUserId = useCallback(
     (uid: string): PlayerMark | null => {
-      // seat 1 = P1, seat 2 = P2. Per ricostruzione precisa serve sapere seat di ogni uid.
-      // Qui usiamo: io so il mio seat; l’altro è l’opposto se presente.
       if (!uid) return null;
       if (uid === meId) return meSeat === 1 ? "P1" : "P2";
       if (opponentId && uid === opponentId) return meSeat === 1 ? "P2" : "P1";
@@ -332,16 +380,24 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
 
   const banner = useMemo(() => {
     if (winner) return winner === meId ? "Hai vinto." : "Hai perso.";
-    if (status === "waiting")
-      return "In attesa di un secondo giocatore. Condividi il codice.";
+
+    if (status === "waiting") {
+      return opponentId
+        ? "Avversario connesso. In attesa che inizi la partita..."
+        : "In attesa di un secondo giocatore. Condividi il codice.";
+    }
+
+    if (status === "active" && !turnUserId)
+      return "Partita avviata. Estrazione turno in corso...";
+
     if (status === "active")
       return canPlay
         ? "È il tuo turno: trascina un pezzo su una colonna."
         : "Turno avversario.";
-    return "Stato non riconosciuto.";
-  }, [winner, meId, status, canPlay]);
 
-  // placement request
+    return "Stato non riconosciuto.";
+  }, [winner, meId, status, opponentId, canPlay]);
+
   const placeMove = useCallback(
     async (invId: string, pieceId: PieceId, dropX: number) => {
       if (!canPlay) return showToast("Non è il tuo turno.", 1400);
@@ -375,7 +431,6 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
       if (data.isWin) showToast("Connessione completata ✅", 1600);
       else showToast("Mossa inserita.", 900);
 
-      // riallinea sempre
       await refresh();
     },
     [canPlay, showToast, matchId, rotation, mirrored, refresh],
@@ -399,7 +454,20 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
     placeMove(invId, pieceId, col);
   }
 
-  // preview (solo se selezionato)
+  // Poll SOLO se waiting (safety net; realtime dovrebbe bastare)
+  useEffect(() => {
+    if (!matchId) return;
+    if (winner) return;
+    if (status !== "waiting") return;
+
+    const id = window.setInterval(() => {
+      refresh();
+    }, 1200);
+
+    return () => window.clearInterval(id);
+  }, [matchId, status, winner, refresh]);
+
+  // preview
   const previewCells = useMemo(() => {
     if (!selectedPiece) return [];
     const base =
@@ -486,7 +554,6 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
         ) : null}
       </div>
 
-      {/* Controls */}
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
@@ -553,7 +620,6 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
           ) : null}
         </div>
 
-        {/* Board */}
         <div className="md:col-span-2 rounded-3xl border border-white/10 bg-black/20 p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
@@ -567,8 +633,8 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
 
           <DndContext onDragEnd={onDragEnd}>
             <div className="relative mt-4">
-              {/* droppable columns overlay */}
-              <div className="pointer-events-none absolute inset-0 z-10 grid grid-cols-9">
+              {/* droppable columns overlay (IMPORTANT: niente pointer-events-none qui) */}
+              <div className="absolute inset-0 z-10 grid grid-cols-9">
                 {Array.from({ length: 9 }).map((_, col) => (
                   <div key={col} className="relative">
                     <ColumnDrop col={col} />
@@ -576,7 +642,6 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
                 ))}
               </div>
 
-              {/* board cells */}
               <div className="grid grid-cols-9 gap-1 rounded-2xl border border-white/10 bg-black/30 p-2">
                 {board.flatMap((row, y) =>
                   row.map((cell, x) => {
@@ -599,7 +664,6 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
               </div>
             </div>
 
-            {/* inventory rack */}
             <div className="mt-6 rounded-3xl border border-white/10 bg-black/30 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-300">
@@ -629,7 +693,7 @@ export default function GridLinkClient({ matchId }: { matchId: string }) {
 
               <div className="mt-4 text-xs text-slate-300">
                 Drag&drop: trascina un pezzo sopra una colonna della griglia. Se
-                non può scendere, il server rifiuta la mossa.
+                non può scendere, il server rifiuta la mossa.s
               </div>
             </div>
           </DndContext>
